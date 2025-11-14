@@ -116,6 +116,31 @@ function M.get_current_session()
 	return current_session
 end
 
+-- Start a new session (save current, then clear workspace)
+function M.new(name)
+	-- Save current session before starting new one
+	local session_to_save = current_session or "_autosave"
+	local current_data = session.capture()
+	storage.save(session_to_save, current_data)
+	vim.notify("Current session saved: " .. session_to_save, vim.log.levels.INFO)
+
+	-- Clear all tabs and buffers
+	vim.cmd("silent! %bdelete")
+	vim.cmd("silent! tabonly")
+
+	if name then
+		-- Set the new session name directly
+		current_session = name
+		vim.notify("New session started: " .. name, vim.log.levels.INFO)
+	else
+		-- Prompt for name using snacks.input
+		ui.prompt_session_name(function(session_name)
+			current_session = session_name
+			vim.notify("New session started: " .. session_name, vim.log.levels.INFO)
+		end, { prompt = "New session name: " })
+	end
+end
+
 -- Autosave functions
 function M.autosave()
 	local autosave_mod = require("bufstate.autosave")

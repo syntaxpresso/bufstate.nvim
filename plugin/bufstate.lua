@@ -60,6 +60,10 @@ vim.api.nvim_create_user_command("ListSessions", function()
 	require("bufstate").list()
 end, {})
 
+vim.api.nvim_create_user_command("NewSession", function(opts)
+	require("bufstate").new(opts.args ~= "" and opts.args or nil)
+end, { nargs = "?" })
+
 -- Autosave commands
 vim.api.nvim_create_user_command("AutosaveStatus", function()
 	require("bufstate").autosave_status()
@@ -82,4 +86,5 @@ if not vim.g.bufstate_no_default_maps then
 	vim.keymap.set("n", "<leader>qs", ":SaveSession<CR>", { desc = "Save current session" })
 	vim.keymap.set("n", "<leader>ql", ":LoadSession<CR>", { desc = "Load session" })
 	vim.keymap.set("n", "<leader>qd", ":DeleteSession<CR>", { desc = "Delete session" })
+	vim.keymap.set("n", "<leader>qn", ":NewSession<CR>", { desc = "New session" })
 end
