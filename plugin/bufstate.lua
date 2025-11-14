@@ -4,6 +4,10 @@ if vim.g.loaded_bufstate then
 end
 vim.g.loaded_bufstate = 1
 
+-- Initialize the plugin with default settings
+-- This ensures autosave is properly configured even if user doesn't call setup()
+require("bufstate").setup({})
+
 -- Define user commands
 vim.api.nvim_create_user_command("SaveSession", function(opts)
 	require("bufstate").save(opts.args ~= "" and opts.args or nil)

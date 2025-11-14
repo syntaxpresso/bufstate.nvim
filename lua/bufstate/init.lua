@@ -173,11 +173,9 @@ end
 function M.setup(opts)
 	opts = opts or {}
 
-	-- Setup autosave if configured
-	if opts.autosave then
-		local autosave_mod = require("bufstate.autosave")
-		autosave_mod.setup(opts.autosave)
-	end
+	-- Setup autosave with user config (or defaults)
+	local autosave_mod = require("bufstate.autosave")
+	autosave_mod.setup(opts.autosave or {})
 end
 
 return M

@@ -14,11 +14,12 @@ local config = {
 	debounce = 30000, -- 30 seconds in milliseconds
 }
 
--- Get current session name from parent module
+-- Get current session name from main module
 local function get_current_session()
-	local ok, main = pcall(require, "bufstate")
-	if ok and main.get_current_session then
-		return main.get_current_session()
+	-- Directly call the main module's function
+	local bufstate = require("bufstate")
+	if bufstate and bufstate.get_current_session then
+		return bufstate.get_current_session()
 	end
 	return nil
 end
