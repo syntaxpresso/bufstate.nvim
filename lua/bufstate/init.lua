@@ -118,11 +118,12 @@ end
 
 -- Start a new session (save current, then clear workspace)
 function M.new(name)
-	-- Save current session before starting new one
-	local session_to_save = current_session or "_autosave"
-	local current_data = session.capture()
-	storage.save(session_to_save, current_data)
-	vim.notify("Current session saved: " .. session_to_save, vim.log.levels.INFO)
+	-- Save current session before starting new one (only if a session is active)
+	if current_session then
+		local current_data = session.capture()
+		storage.save(current_session, current_data)
+		vim.notify("Current session saved: " .. current_session, vim.log.levels.INFO)
+	end
 
 	-- Clear all tabs and buffers
 	vim.cmd("silent! %bdelete")
