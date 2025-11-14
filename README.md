@@ -27,16 +27,14 @@ A Neovim plugin for managing tab-based workspace sessions. Save and restore your
 {
   "syntaxpresso/bufstate.nvim",
   dependencies = { "folke/snacks.nvim" },
-  config = function()
-    require("bufstate").setup({
-      autosave = {
-        enabled = true,      -- Enable autosave (default: true)
-        on_exit = true,      -- Save on VimLeavePre (default: true)
-        interval = 300000,   -- Auto-save every 5 minutes (default: 300000ms)
-        debounce = 30000,    -- Min time between saves (default: 30000ms)
-      }
-    })
-  end,
+  opts = {
+    autosave = {
+      enabled = true,      -- Enable autosave (default: true)
+      on_exit = true,      -- Save on VimLeavePre (default: true)
+      interval = 300000,   -- Auto-save every 5 minutes (default: 300000ms)
+      debounce = 30000,    -- Min time between saves (default: 30000ms)
+    }
+  },
 }
 ```
 
