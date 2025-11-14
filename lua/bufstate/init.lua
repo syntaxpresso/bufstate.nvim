@@ -62,7 +62,7 @@ function M.load(name)
 			current_session = selected.name
 			storage.save_last_loaded(selected.name)
 			vim.notify("Session loaded: " .. selected.name, vim.log.levels.INFO)
-		end, { prompt = "Load Session" })
+		end, { prompt = "Session to load: " })
 	end
 end
 
@@ -176,7 +176,7 @@ end
 -- Setup function for plugin configuration
 function M.setup(opts)
 	opts = opts or {}
-	
+
 	-- Mark that setup has been called
 	vim.g.bufstate_setup_called = true
 
