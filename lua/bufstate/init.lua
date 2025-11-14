@@ -29,6 +29,12 @@ end
 
 -- Load a workspace session
 function M.load(name)
+	-- Save current session before loading a new one
+	local session_to_save = current_session or "_autosave"
+	local current_data = session.capture()
+	storage.save(session_to_save, current_data)
+	vim.notify("Current session saved: " .. session_to_save, vim.log.levels.INFO)
+
 	if name then
 		-- Name provided directly
 		local data, err = storage.load(name)

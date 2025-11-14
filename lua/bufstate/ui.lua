@@ -66,7 +66,7 @@ local function preview_session(ctx)
 				string.format("%d. `%s` (%d buffer%s)", i, tab.cwd, buf_count, buf_count == 1 and "" or "s")
 			)
 			-- Show buffer list
-			for j, buf in ipairs(tab.buffers) do
+			for _, buf in ipairs(tab.buffers) do
 				local filename = vim.fn.fnamemodify(buf.path, ":t")
 				table.insert(lines, string.format("   - %s", filename))
 			end
