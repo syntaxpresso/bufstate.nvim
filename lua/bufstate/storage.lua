@@ -92,4 +92,34 @@ function M.list()
 	return sessions
 end
 
+-- Get path to last loaded session tracker file
+function M.get_last_loaded_path()
+	return M.get_session_dir() .. "/.last_loaded"
+end
+
+-- Save the name of the last loaded session
+function M.save_last_loaded(name)
+	local path = M.get_last_loaded_path()
+	local file = io.open(path, "w")
+	if not file then
+		return false
+	end
+	file:write(name)
+	file:close()
+	return true
+end
+
+-- Get the name of the last loaded session
+function M.get_last_loaded()
+	local path = M.get_last_loaded_path()
+	local file = io.open(path, "r")
+	if not file then
+		return nil
+	end
+	local name = file:read("*all")
+	file:close()
+	return name and name ~= "" and name or nil
+end
+
 return M
+

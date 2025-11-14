@@ -29,11 +29,12 @@ end
 
 -- Load a workspace session
 function M.load(name)
-	-- Save current session before loading a new one
-	local session_to_save = current_session or "_autosave"
-	local current_data = session.capture()
-	storage.save(session_to_save, current_data)
-	vim.notify("Current session saved: " .. session_to_save, vim.log.levels.INFO)
+	-- Save current session before loading a new one (only if a session is active)
+	if current_session then
+		local current_data = session.capture()
+		storage.save(current_session, current_data)
+		vim.notify("Current session saved: " .. current_session, vim.log.levels.INFO)
+	end
 
 	if name then
 		-- Name provided directly
@@ -45,6 +46,7 @@ function M.load(name)
 
 		session.restore(data)
 		current_session = name
+		storage.save_last_loaded(name)
 		vim.notify("Session loaded: " .. name, vim.log.levels.INFO)
 	else
 		-- Show picker using snacks.picker
@@ -58,6 +60,7 @@ function M.load(name)
 
 			session.restore(data)
 			current_session = selected.name
+			storage.save_last_loaded(selected.name)
 			vim.notify("Session loaded: " .. selected.name, vim.log.levels.INFO)
 		end, { prompt = "Load Session" })
 	end
@@ -173,10 +176,34 @@ end
 -- Setup function for plugin configuration
 function M.setup(opts)
 	opts = opts or {}
+	
+	-- Mark that setup has been called
+	vim.g.bufstate_setup_called = true
 
-	-- Setup autosave with user config (or defaults)
+	-- Always setup autosave with user config (or defaults)
 	local autosave_mod = require("bufstate.autosave")
 	autosave_mod.setup(opts.autosave or {})
+
+	-- Auto-load last session on startup
+	if opts.autoload_last_session then
+		-- Use VimEnter to ensure Neovim is fully initialized
+		vim.api.nvim_create_autocmd("VimEnter", {
+			once = true,
+			callback = function()
+				local last_loaded = storage.get_last_loaded()
+				if last_loaded then
+					local data, err = storage.load(last_loaded)
+					if data then
+						session.restore(data)
+						current_session = last_loaded
+						vim.notify("Session auto-loaded: " .. last_loaded, vim.log.levels.INFO)
+					else
+						vim.notify("Failed to auto-load last session: " .. err, vim.log.levels.WARN)
+					end
+				end
+			end,
+		})
+	end
 end
 
 return M

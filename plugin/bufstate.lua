@@ -4,9 +4,17 @@ if vim.g.loaded_bufstate then
 end
 vim.g.loaded_bufstate = 1
 
--- Initialize the plugin with default settings
--- This ensures autosave is properly configured even if user doesn't call setup()
-require("bufstate").setup({})
+-- Ensure setup is called at least once with defaults if user doesn't configure
+-- This is deferred to allow user configuration to run first
+vim.api.nvim_create_autocmd("VimEnter", {
+	once = true,
+	callback = function()
+		-- Only run default setup if user hasn't called setup yet
+		if not vim.g.bufstate_setup_called then
+			require("bufstate").setup({})
+		end
+	end,
+})
 
 -- Define user commands
 vim.api.nvim_create_user_command("SaveSession", function(opts)

@@ -28,6 +28,7 @@ A Neovim plugin for managing tab-based workspace sessions. Save and restore your
   "syntaxpresso/bufstate.nvim",
   dependencies = { "folke/snacks.nvim" },
   opts = {
+    autoload_last_session = false,  -- Auto-load most recent session on startup (default: false)
     autosave = {
       enabled = true,      -- Enable autosave (default: true)
       on_exit = true,      -- Save on VimLeavePre (default: true)
@@ -244,6 +245,7 @@ The plugin works out of the box with sensible defaults. Available configuration 
 
 ```lua
 require("bufstate").setup({
+  autoload_last_session = false,  -- Auto-load most recent session on startup (default: false)
   autosave = {
     enabled = true,      -- Enable autosave feature
     on_exit = true,      -- Save when exiting Neovim
@@ -252,6 +254,18 @@ require("bufstate").setup({
   }
 })
 ```
+
+### Auto-load Last Session
+
+Enable `autoload_last_session` to automatically load your last loaded session when Neovim starts:
+
+```lua
+require("bufstate").setup({
+  autoload_last_session = true,
+})
+```
+
+This will restore the last session you loaded (via `:LoadSession`) every time you open Neovim, making it easy to pick up where you left off. The plugin tracks which session was last loaded and restores it automatically on startup.
 
 ### Disable Autosave
 
