@@ -23,6 +23,7 @@ function M.capture()
 		-- Get ALL buffers (not just listed ones - critical for tab filtering)
 		local buffers = {}
 		local seen = {}
+		local buffer_index = 1
 
 		-- Get all buffers globally - REMOVED buflisted check to capture all buffers
 		for _, bufnr in ipairs(vim.api.nvim_list_bufs()) do
@@ -69,7 +70,9 @@ function M.capture()
 							line = cursor_line,
 							col = cursor_col,
 							timestamp = tabfilter.get_buffer_timestamp(bufnr) or os.time(),
+							index = buffer_index,
 						})
+						buffer_index = buffer_index + 1
 					end
 				end
 			end
@@ -87,20 +90,47 @@ function M.capture()
 	vim.cmd("tabnext " .. current_tab)
 	vim.cmd(current_win .. "wincmd w")
 
-	-- Sort tabs by timestamp (most recent first) so restore opens the last active tab
+	-- Sort tabs by index (preserve tab order)
 	table.sort(tabs, function(a, b)
-		return (a.timestamp or 0) > (b.timestamp or 0)
+		return a.index < b.index
 	end)
 
-	-- Sort buffers within each tab by timestamp (most recent first)
+	-- Find the most recently active tab to mark for focus
+	local most_recent_tab_idx = 1
+	local most_recent_tab_time = 0
+	for idx, tab in ipairs(tabs) do
+		if (tab.timestamp or 0) > most_recent_tab_time then
+			most_recent_tab_time = tab.timestamp or 0
+			most_recent_tab_idx = idx
+		end
+	end
+
+	-- Sort buffers within each tab by index (preserve buffer list order)
 	for _, tab in ipairs(tabs) do
 		table.sort(tab.buffers, function(a, b)
+			-- If both have index, sort by index (lower index = earlier in list)
+			if a.index and b.index then
+				return a.index < b.index
+			end
+			-- Fallback to timestamp for backward compatibility with old sessions
 			return (a.timestamp or 0) > (b.timestamp or 0)
 		end)
+		
+		-- Find the most recently active buffer to mark for focus
+		local most_recent_idx = 1
+		local most_recent_time = 0
+		for idx, buf in ipairs(tab.buffers) do
+			if (buf.timestamp or 0) > most_recent_time then
+				most_recent_time = buf.timestamp or 0
+				most_recent_idx = idx
+			end
+		end
+		tab.active_buffer_index = most_recent_idx
 	end
 
 	return {
 		tabs = tabs,
+		active_tab_index = most_recent_tab_idx,
 		version = 3, -- Bump version for timestamp support
 		timestamp = os.time(),
 	}
@@ -118,25 +148,28 @@ function M.restore(session_data)
 	vim.cmd("tabonly")
 
 	-- Close all buffers in the first tab
-	vim.cmd("%bdelete")
+	vim.cmd("silent! %bdelete")
 
 	-- Restore each tab with its directory and buffers
 	-- Note: tabs are already sorted by timestamp (most recent first) from capture()
 	for i, tab in ipairs(session_data.tabs) do
-		if i == 1 then
-			-- First tab already exists, just set its directory
-			vim.cmd("tcd " .. vim.fn.fnameescape(tab.cwd))
-		else
-			-- Create new tab
-			vim.cmd("tabnew")
-			-- Set tab-local directory
-			vim.cmd("tcd " .. vim.fn.fnameescape(tab.cwd))
-		end
-
 		-- Restore buffers if available (version 2+)
-		-- Note: buffers are already sorted by timestamp (most recent first) from capture()
+		-- Note: buffers are sorted by index (preserving original order) from capture()
 		if tab.buffers and #tab.buffers > 0 then
-			-- Load all buffers with buflisted=false initially
+			local active_idx = tab.active_buffer_index or 1
+			local active_buf_data = nil
+			
+			if i == 1 then
+				-- First tab already exists, just set its directory
+				vim.cmd("tcd " .. vim.fn.fnameescape(tab.cwd))
+			else
+				-- Create new tab with the first buffer to avoid [No Name]
+				vim.cmd("tabnew")
+				-- Set tab-local directory
+				vim.cmd("tcd " .. vim.fn.fnameescape(tab.cwd))
+			end
+			
+			-- First pass: Load all buffers in order using :badd to preserve order
 			for j, buf in ipairs(tab.buffers) do
 				local path = buf.path
 				-- Make path absolute if relative
@@ -144,20 +177,34 @@ function M.restore(session_data)
 					path = tab.cwd .. "/" .. path
 				end
 
-				if j == 1 then
-					-- First buffer: open it in the current window
-					vim.cmd("edit " .. vim.fn.fnameescape(path))
-					-- Restore cursor position for the first (most recent) buffer
-					vim.fn.cursor(buf.line or 1, buf.col or 1)
-				else
-					-- Other buffers: just load them without displaying
-					vim.cmd("badd " .. vim.fn.fnameescape(path))
-				end
+				-- Load buffer without displaying
+				vim.cmd("badd " .. vim.fn.fnameescape(path))
 
 				-- Set buflisted=false for all initially
 				local bufnr = vim.fn.bufnr(path)
 				if bufnr ~= -1 then
 					vim.bo[bufnr].buflisted = false
+				end
+				
+				-- Remember the active buffer data for later
+				if j == active_idx then
+					active_buf_data = { path = path, line = buf.line, col = buf.col }
+				end
+			end
+			
+			-- Second pass: Switch to the active buffer and restore cursor
+			if active_buf_data then
+				vim.cmd("buffer " .. vim.fn.fnameescape(active_buf_data.path))
+				vim.fn.cursor(active_buf_data.line or 1, active_buf_data.col or 1)
+			end
+			
+			-- Delete all [No Name] buffers created during tab initialization
+			for _, bufnr in ipairs(vim.api.nvim_list_bufs()) do
+				if vim.api.nvim_buf_is_valid(bufnr) then
+					local bufname = vim.api.nvim_buf_get_name(bufnr)
+					if bufname == "" then
+						vim.cmd("silent! bdelete " .. bufnr)
+					end
 				end
 			end
 		end
@@ -166,12 +213,12 @@ function M.restore(session_data)
 	-- Rebuild buffer-tab mapping
 	tabfilter.rebuild_mapping()
 
-	-- Switch to first tab (which is the most recently active tab)
-	vim.cmd("tabnext 1")
+	-- Switch to the most recently active tab (or first tab if not specified)
+	local active_tab = session_data.active_tab_index or 1
+	vim.cmd("tabnext " .. active_tab)
 
 	-- Set buflisted=true only for current tab's buffers
-	-- The first buffer is already open with cursor position restored
-	tabfilter.update_buflisted(1)
+	tabfilter.update_buflisted(active_tab)
 end
 
 return M
