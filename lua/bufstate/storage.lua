@@ -19,8 +19,48 @@ function M.get_session_path(name)
 	return M.get_session_dir() .. "/" .. name .. ".json"
 end
 
+-- Get path to metadata file
+function M.get_metadata_path()
+	return M.get_session_dir() .. "/sessions.json"
+end
+
+-- Load metadata
+function M.load_metadata()
+	local path = M.get_metadata_path()
+	local file = io.open(path, "r")
+
+	if not file then
+		return { sessions = {} }
+	end
+
+	local content = file:read("*all")
+	file:close()
+
+	local ok, data = pcall(vim.json.decode, content)
+	if not ok then
+		return { sessions = {} }
+	end
+
+	return data
+end
+
+-- Save metadata
+function M.save_metadata(metadata)
+	local path = M.get_metadata_path()
+	local json = vim.json.encode(metadata)
+
+	local file = io.open(path, "w")
+	if not file then
+		error("Failed to write metadata file: " .. path)
+	end
+
+	file:write(json)
+	file:close()
+end
+
 -- Save session data to JSON file
 function M.save(name, data)
+	-- Save session file (existing logic)
 	local path = M.get_session_path(name)
 	local json = vim.json.encode(data)
 
@@ -31,6 +71,27 @@ function M.save(name, data)
 
 	file:write(json)
 	file:close()
+
+	-- Update metadata
+	local metadata = M.load_metadata()
+	local found = false
+
+	for _, session in ipairs(metadata.sessions) do
+		if session.name == name then
+			session.timestamp = data.timestamp
+			found = true
+			break
+		end
+	end
+
+	if not found then
+		table.insert(metadata.sessions, {
+			name = name,
+			timestamp = data.timestamp,
+		})
+	end
+
+	M.save_metadata(metadata)
 
 	return true
 end
@@ -64,32 +125,82 @@ function M.delete(name)
 	end
 
 	vim.fn.delete(path)
+
+	-- Update metadata
+	local metadata = M.load_metadata()
+	for i, session in ipairs(metadata.sessions) do
+		if session.name == name then
+			table.remove(metadata.sessions, i)
+			break
+		end
+	end
+	M.save_metadata(metadata)
+
 	return true
 end
 
 -- List all available sessions
 function M.list()
-	local session_dir = M.get_session_dir()
-	local files = vim.fn.glob(session_dir .. "/*.json", false, true)
+	local metadata = M.load_metadata()
 
-	local sessions = {}
-	for _, file in ipairs(files) do
-		local name = vim.fn.fnamemodify(file, ":t:r")
-		local stat = vim.loop.fs_stat(file)
+	if #metadata.sessions > 0 then
+		-- Use metadata
+		local sessions = {}
+		for _, meta in ipairs(metadata.sessions) do
+			table.insert(sessions, {
+				name = meta.name,
+				path = M.get_session_path(meta.name),
+				modified = meta.timestamp or 0,
+			})
+		end
 
-		table.insert(sessions, {
-			name = name,
-			path = file,
-			modified = stat and stat.mtime.sec or 0,
-		})
+		table.sort(sessions, function(a, b)
+			return a.modified > b.modified
+		end)
+
+		return sessions
+	else
+		-- Fallback to scanning directory (backward compatibility)
+		local session_dir = M.get_session_dir()
+		local files = vim.fn.glob(session_dir .. "/*.json", false, true)
+
+		local sessions = {}
+		for _, file in ipairs(files) do
+			local name = vim.fn.fnamemodify(file, ":t:r")
+
+			-- Skip metadata file
+			if name ~= "sessions" then
+				local stat = vim.loop.fs_stat(file)
+				table.insert(sessions, {
+					name = name,
+					path = file,
+					modified = stat and stat.mtime.sec or 0,
+				})
+			end
+		end
+
+		table.sort(sessions, function(a, b)
+			return a.modified > b.modified
+		end)
+
+		return sessions
+	end
+end
+
+-- Get latest session by timestamp
+function M.get_latest_session()
+	local metadata = M.load_metadata()
+
+	if #metadata.sessions == 0 then
+		return nil
 	end
 
-	-- Sort by most recently modified
-	table.sort(sessions, function(a, b)
-		return a.modified > b.modified
+	-- Sort by timestamp descending
+	table.sort(metadata.sessions, function(a, b)
+		return (a.timestamp or 0) > (b.timestamp or 0)
 	end)
 
-	return sessions
+	return metadata.sessions[1].name
 end
 
 -- Get path to last loaded session tracker file
