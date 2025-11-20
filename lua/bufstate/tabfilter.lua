@@ -141,7 +141,7 @@ end
 
 -- Remove tab from all buffer associations
 function M.untrack_tab(tabnr)
-	for bufnr, tabs in pairs(state.buffer_tabs) do
+	for _, tabs in pairs(state.buffer_tabs) do
 		for i, tab in ipairs(tabs) do
 			if tab == tabnr then
 				table.remove(tabs, i)
@@ -205,10 +205,10 @@ end
 function M.update_current_timestamps()
 	local current_tab = vim.fn.tabpagenr()
 	local current_buf = vim.api.nvim_get_current_buf()
-	
+
 	-- Update current tab timestamp
 	state.active_timestamps.tabs[current_tab] = os.time()
-	
+
 	-- Update current buffer timestamp
 	if vim.api.nvim_buf_is_valid(current_buf) then
 		state.active_timestamps.buffers[current_buf] = os.time()

@@ -1,6 +1,9 @@
 -- Storage module for handling JSON session files
 local M = {}
 
+-- Compatibility: use vim.uv if available (Neovim 0.10+), otherwise vim.loop
+local uv = vim.uv or vim.loop
+
 -- Get the session storage directory
 function M.get_session_dir()
 	local data_path = vim.fn.stdpath("data")
@@ -170,7 +173,7 @@ function M.list()
 
 			-- Skip metadata file
 			if name ~= "sessions" then
-				local stat = vim.loop.fs_stat(file)
+				local stat = uv.fs_stat(file)
 				table.insert(sessions, {
 					name = name,
 					path = file,
@@ -238,4 +241,3 @@ function M.get_last_loaded()
 end
 
 return M
-

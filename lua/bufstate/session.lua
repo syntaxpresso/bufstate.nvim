@@ -4,10 +4,10 @@ local M = {}
 -- Capture the current workspace state (all tabs and their root directories)
 function M.capture()
 	local tabfilter = require("bufstate.tabfilter")
-	
+
 	-- Update timestamps for current tab and buffer BEFORE capturing
 	tabfilter.update_current_timestamps()
-	
+
 	local tabs = {}
 	local tab_count = vim.fn.tabpagenr("$")
 	local current_tab = vim.fn.tabpagenr()
@@ -115,7 +115,7 @@ function M.capture()
 			-- Fallback to timestamp for backward compatibility with old sessions
 			return (a.timestamp or 0) > (b.timestamp or 0)
 		end)
-		
+
 		-- Find the most recently active buffer to mark for focus
 		local most_recent_idx = 1
 		local most_recent_time = 0
@@ -158,7 +158,7 @@ function M.restore(session_data)
 		if tab.buffers and #tab.buffers > 0 then
 			local active_idx = tab.active_buffer_index or 1
 			local active_buf_data = nil
-			
+
 			if i == 1 then
 				-- First tab already exists, just set its directory
 				vim.cmd("tcd " .. vim.fn.fnameescape(tab.cwd))
@@ -168,7 +168,7 @@ function M.restore(session_data)
 				-- Set tab-local directory
 				vim.cmd("tcd " .. vim.fn.fnameescape(tab.cwd))
 			end
-			
+
 			-- First pass: Load all buffers in order using :badd to preserve order
 			for j, buf in ipairs(tab.buffers) do
 				local path = buf.path
@@ -185,19 +185,19 @@ function M.restore(session_data)
 				if bufnr ~= -1 then
 					vim.bo[bufnr].buflisted = false
 				end
-				
+
 				-- Remember the active buffer data for later
 				if j == active_idx then
 					active_buf_data = { path = path, line = buf.line, col = buf.col }
 				end
 			end
-			
+
 			-- Second pass: Switch to the active buffer and restore cursor
 			if active_buf_data then
 				vim.cmd("buffer " .. vim.fn.fnameescape(active_buf_data.path))
 				vim.fn.cursor(active_buf_data.line or 1, active_buf_data.col or 1)
 			end
-			
+
 			-- Delete all [No Name] buffers created during tab initialization
 			for _, bufnr in ipairs(vim.api.nvim_list_bufs()) do
 				if vim.api.nvim_buf_is_valid(bufnr) then

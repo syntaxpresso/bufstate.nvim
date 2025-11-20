@@ -1,6 +1,9 @@
 -- Autosave module for bufstate
 local M = {}
 
+-- Compatibility: use vim.uv if available (Neovim 0.10+), otherwise vim.loop
+local uv = vim.uv or vim.loop
+
 -- State
 local timer = nil
 local last_save_time = 0
@@ -31,7 +34,7 @@ function M.perform_autosave()
 	end
 
 	-- Check debounce
-	local now = vim.loop.now()
+	local now = uv.now()
 	if now - last_save_time < config.debounce then
 		return
 	end
@@ -63,7 +66,7 @@ function M.start()
 	M.stop()
 
 	-- Create new timer
-	timer = vim.loop.new_timer()
+	timer = uv.new_timer()
 	if timer then
 		timer:start(
 			config.interval, -- Initial delay
