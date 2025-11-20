@@ -444,9 +444,3 @@ Issues and pull requests welcome!
 - [tmux](https://github.com/tmux/tmux) - Persistent workspace inspiration
 
 ---
-
-<div align="center">
-
-**Made with ❤️ for Neovim users who want tmux-like persistence without leaving their editor**
-
-</div>
