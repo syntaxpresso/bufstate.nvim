@@ -1,9 +1,10 @@
 <div align="center">
+  <img width="500" alt="syntaxpresso" src="https://github.com/user-attachments/assets/be0749b2-1e53-469c-8d99-012024622ade" />
+</div>
 
-![Neovim](https://img.shields.io/badge/NeoVim-%2357A143.svg?&logo=neovim&logoColor=white)
-![Lua](https://img.shields.io/badge/built%20with-Lua-blue?logo=lua)
-![License](https://img.shields.io/badge/license-MIT-blue)
-
+<div align="center">
+  <img alt="neovim" src="https://img.shields.io/badge/NeoVim-%2357A143.svg?&logo=neovim&logoColor=white" />
+  <img alt="lua" src="https://img.shields.io/badge/built%20with-Lua-blue?logo=lua" />
 </div>
 
 ## Why bufstate?
@@ -12,12 +13,24 @@ Stop juggling between tmux sessions and Neovim. **bufstate.nvim** brings the pow
 
 - **🎯 Tab-based workspaces** - Each tab is an isolated workspace with its own working directory
 - **💾 Persistent sessions** - Save and restore your entire workspace layout instantly
-- **🧠 Smart buffer filtering** - Only see buffers related to your current tab
+- **🧠 Smart buffer filtering** - Only see buffers relevant to your current tab
 - **⚡ Auto-save everything** - Never lose your workspace state again
 - **🎨 Order preservation** - Tabs and buffers restore in exactly the same order
 - **🔄 Context switching** - Jump between projects faster than tmux sessions
 
-**Think of it as:** tmux sessions + vim-obsession.
+**Think of it as:** tmux sessions + vim-obsession, but native, faster, and smarter.
+
+### What Makes bufstate Different?
+
+Unlike **vim-obsession** (which wraps Vim's `:mksession`) or **vim-ctrlspace** (which is a feature-heavy workspace ecosystem):
+
+- ✅ **Zero external dependencies** (except snacks.nvim for UI)
+- ✅ **Focused on doing one thing well** - session management with tab filtering
+- ✅ **Neovim-native** - Built with modern Lua APIs
+- ✅ **Human-readable JSON** sessions - inspect, edit, version control
+- ✅ **Smart state tracking** - Remembers last active tab/buffer with timestamps
+- ✅ **Order preservation** - Exact tab and buffer order and cursor position, always
+- ✅ **Integrates seamlessly** - Works with Telescope, statusline plugins, etc
 
 ## ✨ Features
 
@@ -176,3 +189,264 @@ vim.g.bufstate_no_default_maps = 1
 | `:AutosavePause`  | Pause autosave       |
 | `:AutosaveResume` | Resume autosave      |
 | `:AutosaveNow`    | Force immediate save |
+
+## 🆚 Comparison with Other Session Managers
+
+### bufstate vs vim-obsession
+
+| Feature                  | vim-obsession                       | bufstate.nvim                                      |
+| ------------------------ | ----------------------------------- | -------------------------------------------------- |
+| **Approach**             | Wraps Vim's `:mksession`            | Custom JSON-based format                           |
+| **Multiple sessions**    | ❌ One active session               | ✅ Multiple named sessions                         |
+| **Session switching**    | ❌ Manual load/save                 | ✅ Interactive picker with fuzzy search            |
+| **Auto-save**            | ✅ Continuous (every layout change) | ✅ Configurable intervals (5 min default)          |
+| **Tab support**          | ⚠️ Basic (saves layout)             | ✅ **Advanced**: Order, timestamps, tab-local dirs |
+| **Buffer management**    | ⚠️ Saves open buffers               | ✅ **Order, positions, timestamps per tab**        |
+| **Buffer filtering**     | ❌ None                             | ✅ **Tab-based filtering via `buflisted`**         |
+| **Focus restoration**    | ❌ No                               | ✅ **Last active tab + buffer**                    |
+| **Order preservation**   | ⚠️ Partial                          | ✅ **Exact tab and buffer order**                  |
+| **Session metadata**     | ❌ None                             | ✅ Timestamps, active tab/buffer tracking          |
+| **Auto-load on startup** | ❌ Manual                           | ✅ Configurable                                    |
+| **Storage format**       | Vim session file (`.vim`)           | ✅ **Human-readable JSON**                         |
+| **Project isolation**    | ❌ No concept                       | ✅ **Tab-local working directories**               |
+
+**Use vim-obsession if you want:**
+
+- ✅ Minimal, lightweight solution
+- ✅ Single session workflow
+- ✅ Vim's native session format
+- ✅ "Set and forget" continuous save
+
+**Use bufstate if you want:**
+
+- ✅ **Multiple projects with instant switching**
+- ✅ **Tab-based workspace isolation**
+- ✅ **Smart buffer filtering**
+- ✅ **Exact state restoration (order, focus, positions)**
+
+---
+
+### bufstate vs vim-ctrlspace
+
+| Feature                  | vim-ctrlspace                                                  | bufstate.nvim                                   |
+| ------------------------ | -------------------------------------------------------------- | ----------------------------------------------- |
+| **Platform**             | Vim + Neovim                                                   | ✅ **Neovim-first** (modern API)                |
+| **Dependencies**         | ⚠️ Go file engine binary                                       | ✅ **Zero external deps** (except snacks.nvim)  |
+| **Complexity**           | ⚠️ Feature-heavy (buffers, files, tabs, workspaces, bookmarks) | ✅ **Focused** (sessions + tab filtering)       |
+| **Buffer lists**         | ✅ Per-tab buffer lists                                        | ✅ **Same, via `buflisted`** (more transparent) |
+| **File browser**         | ✅ Built-in fuzzy search                                       | ❌ Use Telescope/fzf instead                    |
+| **Bookmarks**            | ✅ Project bookmarks                                           | ❌ Use sessions instead                         |
+| **Workspace management** | ✅ Save/load workspaces                                        | ✅ **Same** (called sessions)                   |
+| **Auto-save**            | ⚠️ Manual or via events                                        | ✅ **Built-in, configurable**                   |
+| **Tab management**       | ✅ Advanced (move, copy, name)                                 | ⚠️ **Standard Neovim tabs**                     |
+| **Session format**       | Custom Vim format                                              | ✅ **JSON** (inspectable, portable)             |
+| **Tab filtering**        | ⚠️ Custom implementation                                       | ✅ **Native `buflisted`** (plugin-friendly)     |
+| **UI**                   | ⚠️ Custom window                                               | ✅ **snacks.nvim picker** (modern)              |
+| **Learning curve**       | ⚠️ Steep (many concepts)                                       | ✅ **Gentle** (familiar Neovim)                 |
+| **Order preservation**   | ❌ Not emphasized                                              | ✅ **Core feature**                             |
+| **Timestamp tracking**   | ❌ No                                                          | ✅ **Smart focus restoration**                  |
+
+**Use vim-ctrlspace if you want:**
+
+- ✅ All-in-one workspace solution
+- ✅ Built-in fuzzy file search
+- ✅ Project bookmarks feature
+- ✅ Advanced tab manipulation (rename, move, copy)
+- ✅ Don't mind external dependencies and complexity
+
+**Use bufstate if you want:**
+
+- ✅ **Simple, focused tool**
+- ✅ **Zero external dependencies**
+- ✅ **Modern Neovim integration**
+- ✅ **Works with existing tools** (Telescope, etc.)
+- ✅ **Minimal learning curve**
+
+---
+
+### bufstate vs tmux
+
+| Feature                   | tmux                      | bufstate.nvim                        |
+| ------------------------- | ------------------------- | ------------------------------------ |
+| **Workspace isolation**   | ✅ Sessions               | ✅ Tab-based sessions                |
+| **Persistent state**      | ✅ tmux-resurrect needed  | ✅ **Built-in, automatic**           |
+| **Auto-save**             | ❌ Manual plugin required | ✅ **Native, configurable**          |
+| **Buffer management**     | ❌ N/A                    | ✅ **Smart filtering per tab**       |
+| **Context preservation**  | ⚠️ Window layout only     | ✅ **Tabs, buffers, cursors, order** |
+| **Startup speed**         | ⚠️ Needs attach           | ✅ **Auto-loads instantly**          |
+| **Integration**           | ⚠️ Separate tool          | ✅ **Native Neovim**                 |
+| **Terminal multiplexing** | ✅ Yes                    | ❌ Use tabs + terminal buffers       |
+| **Remote sessions**       | ✅ Yes                    | ❌ Local only                        |
+| **Learning curve**        | ⚠️ Moderate               | ✅ **Minimal** (if you know Neovim)  |
+
+**When to use bufstate instead of tmux:**
+
+- ✅ You work primarily in Neovim
+- ✅ You want automatic session management
+- ✅ You prefer tab-based workflows
+- ✅ You want intelligent buffer filtering
+- ✅ You work on a single machine
+
+**When to stick with tmux:**
+
+- ✅ You need remote session persistence
+- ✅ You use multiple terminal applications
+- ✅ You need terminal multiplexing outside Neovim
+
+**Pro tip:** You can use both! Run Neovim with bufstate inside a tmux session for the best of both worlds.
+
+---
+
+## 🎓 Usage Examples
+
+### Example 1: Multi-Project Developer
+
+```vim
+" Morning: Load your saved workspace
+:BufstateLoad daily-work
+
+" Workspace has 3 tabs:
+" Tab 1: Frontend (/projects/web-app)
+" Tab 2: Backend (/projects/api)
+" Tab 3: Documentation (/projects/docs)
+
+" Work all day, auto-saves every 5 minutes
+" Quick saves with <leader>qs when needed
+
+" Evening: Just quit - everything auto-saves
+:qa
+```
+
+### Example 2: Context Switching
+
+```vim
+" Working on feature-A
+:BufstateSave feature-a
+
+" Emergency: switch to bugfix
+:BufstateNew bugfix
+:tcd ~/projects/app
+:edit src/auth.js
+" Fix bug...
+:BufstateSave bugfix
+
+" Back to feature-A
+:BufstateLoad feature-a
+" Exactly where you left off!
+```
+
+### Example 3: Client Projects
+
+```vim
+" Setup workspaces for different clients
+:tabnew | tcd ~/clients/acme/web
+:tabnew | tcd ~/clients/acme/api
+:BufstateSave acme
+
+:BufstateNew globex
+:tabnew | tcd ~/clients/globex/app
+:BufstateSave globex
+
+" Switch between clients instantly
+:BufstateLoad acme    " All ACME tabs
+:BufstateLoad globex  " All Globex tabs
+```
+
+## ⚙️ Configuration
+
+### Full Configuration
+
+```lua
+require("bufstate").setup({
+  -- Tab-based buffer filtering
+  filter_by_tab = true,           -- Default: true
+
+  -- Auto-load last session on startup
+  autoload_last_session = true,   -- Default: false
+
+  -- Autosave configuration
+  autosave = {
+    enabled = true,      -- Enable autosave feature
+    on_exit = true,      -- Save when exiting Neovim
+    interval = 300000,   -- Auto-save every 5 minutes (0 = disabled)
+    debounce = 30000,    -- Minimum 30 seconds between saves
+  }
+})
+```
+
+### Configuration Examples
+
+**Minimal (auto-save only):**
+
+```lua
+require("bufstate").setup({
+  autoload_last_session = false,
+  autosave = { enabled = true },
+})
+```
+
+**tmux replacement mode:**
+
+```lua
+require("bufstate").setup({
+  filter_by_tab = true,
+  autoload_last_session = true,
+  autosave = {
+    enabled = true,
+    on_exit = true,
+    interval = 300000,  -- 5 minutes
+  }
+})
+```
+
+**Manual-save only:**
+
+```lua
+require("bufstate").setup({
+  filter_by_tab = true,
+  autosave = { enabled = false },
+})
+```
+
+## 💡 Tips & Tricks
+
+1. **Use descriptive session names**
+   - ✅ `ecommerce-redesign`
+   - ❌ `project1`
+
+2. **One session per project context**
+   - Frontend + Backend = one session
+   - Different features = different sessions
+
+3. **Leverage auto-load**
+   - Set `autoload_last_session = true`
+   - Just open Neovim - you're ready to work
+
+4. **Quick save often**
+   - `<leader>qs` becomes muscle memory
+   - Auto-save is backup, manual save is intentional
+
+5. **Use tabs for logical separation**
+   - One tab = one area of concern
+   - Different repositories = different tabs
+
+## 🤝 Contributing
+
+Issues and pull requests welcome!
+
+[Report Bug](https://github.com/syntaxpresso/bufstate.nvim/issues) · [Request Feature](https://github.com/syntaxpresso/bufstate.nvim/issues)
+
+## 🙏 Acknowledgments
+
+- [snacks.nvim](https://github.com/folke/snacks.nvim) - UI components
+- [vim-obsession](https://github.com/tpope/vim-obsession) - Session inspiration
+- [vim-ctrlspace](https://github.com/vim-ctrlspace/vim-ctrlspace) - Workspace management inspiration
+- [tmux](https://github.com/tmux/tmux) - Persistent workspace inspiration
+
+---
+
+<div align="center">
+
+**Made with ❤️ for Neovim users who want tmux-like persistence without leaving their editor**
+
+</div>
