@@ -201,4 +201,18 @@ function M.on_buf_enter(bufnr)
 	M.track_buffer(bufnr)
 end
 
+-- Update timestamps for current tab and buffer (call before saving session)
+function M.update_current_timestamps()
+	local current_tab = vim.fn.tabpagenr()
+	local current_buf = vim.api.nvim_get_current_buf()
+	
+	-- Update current tab timestamp
+	state.active_timestamps.tabs[current_tab] = os.time()
+	
+	-- Update current buffer timestamp
+	if vim.api.nvim_buf_is_valid(current_buf) then
+		state.active_timestamps.buffers[current_buf] = os.time()
+	end
+end
+
 return M

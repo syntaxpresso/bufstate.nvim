@@ -253,16 +253,20 @@ require("bufstate").setup({
 
 ## How It Works
 
-1. **Saving**: Captures the tab-local directory (`tcd`), all open buffers, and timestamps for each tab
+1. **Saving**: 
+   - Captures tab-local directory (`tcd`), all buffers, and timestamps for each tab
+   - Sorts tabs by timestamp (most recent first)
+   - Sorts buffers within each tab by timestamp (most recent first)
 2. **Storage**: Sessions saved as JSON files in `~/.local/share/nvim/bufstate-sessions/`
    - Individual session files (e.g., `myproject.json`)
    - Metadata file (`sessions.json`) for tracking timestamps
 3. **Loading**: 
    - Closes all tabs/buffers
-   - Recreates tabs with saved directories
+   - Recreates tabs with saved directories (in timestamp order)
    - Loads all buffers with `buflisted=false` initially
-   - Finds and focuses the most recently active tab (by timestamp)
-   - Finds and focuses the most recently active buffer in that tab
+   - Opens the first tab (most recently active)
+   - Opens the first buffer in that tab (most recently active)
+   - Restores cursor position
    - Sets `buflisted=true` only for the current tab's buffers
 4. **Tab Filtering**: Buffers automatically filter based on current tab
    - Associated by: visible in tab OR path under tab's `cwd`

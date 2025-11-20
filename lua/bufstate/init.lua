@@ -195,22 +195,25 @@ function M.setup(opts)
 		vim.api.nvim_create_autocmd("VimEnter", {
 			once = true,
 			callback = function()
-				-- Check if any buffers were opened with nvim (e.g., nvim file.txt)
-				local has_args = #vim.fn.argv() > 0
+				-- Schedule to ensure Neovim is fully initialized
+				vim.schedule(function()
+					-- Check if any buffers were opened with nvim (e.g., nvim file.txt)
+					local has_args = #vim.fn.argv() > 0
 
-				if not has_args then
-					local latest = storage.get_latest_session()
-					if latest then
-						local data, err = storage.load(latest)
-						if data then
-							session.restore(data)
-							current_session = latest
-							vim.notify("Session auto-loaded: " .. latest, vim.log.levels.INFO)
-						else
-							vim.notify("Failed to auto-load latest session: " .. err, vim.log.levels.WARN)
+					if not has_args then
+						local latest = storage.get_latest_session()
+						if latest then
+							local data, err = storage.load(latest)
+							if data then
+								session.restore(data)
+								current_session = latest
+								vim.notify("Session auto-loaded: " .. latest, vim.log.levels.INFO)
+							else
+								vim.notify("Failed to auto-load latest session: " .. err, vim.log.levels.WARN)
+							end
 						end
 					end
-				end
+				end)
 			end,
 		})
 	end

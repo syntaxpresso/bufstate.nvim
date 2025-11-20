@@ -191,16 +191,21 @@ end
 function M.get_latest_session()
 	local metadata = M.load_metadata()
 
-	if #metadata.sessions == 0 then
+	if #metadata.sessions > 0 then
+		-- Use metadata if available
+		table.sort(metadata.sessions, function(a, b)
+			return (a.timestamp or 0) > (b.timestamp or 0)
+		end)
+		return metadata.sessions[1].name
+	else
+		-- Fallback: scan directory for session files (backward compatibility)
+		local sessions = M.list()
+		if #sessions > 0 then
+			-- list() already sorts by modified time, so first is most recent
+			return sessions[1].name
+		end
 		return nil
 	end
-
-	-- Sort by timestamp descending
-	table.sort(metadata.sessions, function(a, b)
-		return (a.timestamp or 0) > (b.timestamp or 0)
-	end)
-
-	return metadata.sessions[1].name
 end
 
 -- Get path to last loaded session tracker file
