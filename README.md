@@ -18,7 +18,9 @@ Stop juggling between tmux sessions and Neovim. **bufstate.nvim** brings the pow
 - **🎨 Order preservation** - Tabs and buffers restore in exactly the same order
 - **🔄 Context switching** - Jump between projects faster than tmux sessions
 
-**Think of it as:** tmux sessions + vim-obsession, but native, faster, and smarter.
+**Think of it as:** tmux sessions + vim-obsession.
+
+https://github.com/user-attachments/assets/9162f9a5-8576-4f95-b01b-0f2a1ab10f17
 
 ### What Makes bufstate Different?
 
