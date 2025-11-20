@@ -101,19 +101,39 @@ Old session files remain compatible for reading but won't have timestamps or fil
 
 ### Commands
 
-- `:SaveSession [name]` - Save current workspace session
+#### New Commands (Recommended)
+
+- `:BufstateSave` - Save current session (overwrites current session)
+  - If no session is active, prompts for name (behaves like SaveAs)
+  - If session is active, overwrites it
+  
+- `:BufstateSaveAs [name]` - Save current session with a new name
   - Without argument: Opens `snacks.input` prompt for session name
   - With argument: Saves session with the provided name
 
-- `:LoadSession [name]` - Load a saved session
+- `:BufstateLoad [name]` - Load a saved session
   - Without argument: Opens `snacks.picker` to select session
   - With argument: Loads the specified session
 
-- `:DeleteSession [name]` - Delete a session
+- `:BufstateDelete [name]` - Delete a session
   - Without argument: Opens `snacks.picker` to select session to delete
   - With argument: Deletes the specified session
 
-- `:ListSessions` - Print all available sessions to command line
+- `:BufstateList` - Print all available sessions to command line
+
+- `:BufstateNew [name]` - Start a new session
+  - Saves current session first, then clears workspace
+  - Without argument: Prompts for new session name
+  - With argument: Uses provided name
+
+#### Legacy Commands (Backward Compatibility)
+
+These commands still work but use the new behavior:
+
+- `:SaveSession [name]` - If name provided, saves as new session; otherwise saves current session
+- `:LoadSession [name]` - Load a session
+- `:DeleteSession [name]` - Delete a session
+- `:ListSessions` - List all sessions
 
 **Autosave Commands:**
 
@@ -126,9 +146,11 @@ Old session files remain compatible for reading but won't have timestamps or fil
 
 The plugin provides default keymaps for common operations:
 
-- `<leader><tab>s` - Save session (opens input prompt)
-- `<leader><tab>l` - Load session (opens picker)
-- `<leader><tab>d` - Delete session (opens picker)
+- `<leader>qs` - Save session (overwrites current session, or prompts for name if no session active)
+- `<leader>qS` - Save session as (prompts for new name)
+- `<leader>ql` - Load session (opens picker)
+- `<leader>qd` - Delete session (opens picker)
+- `<leader>qn` - New session (saves current, then starts fresh)
 
 To disable default keymaps, add to your config before the plugin loads:
 
@@ -145,9 +167,10 @@ let g:bufstate_no_default_maps = 1
 Then set your own keymaps:
 
 ```lua
-vim.keymap.set('n', '<your-key>', ':SaveSession<CR>')
-vim.keymap.set('n', '<your-key>', ':LoadSession<CR>')
-vim.keymap.set('n', '<your-key>', ':DeleteSession<CR>')
+vim.keymap.set('n', '<your-key>', ':BufstateSave<CR>')
+vim.keymap.set('n', '<your-key>', ':BufstateSaveAs<CR>')
+vim.keymap.set('n', '<your-key>', ':BufstateLoad<CR>')
+vim.keymap.set('n', '<your-key>', ':BufstateDelete<CR>')
 ```
 
 ### Example Workflow
@@ -161,45 +184,58 @@ vim.keymap.set('n', '<your-key>', ':DeleteSession<CR>')
 :tabnew
 :tcd ~/projects/project-c
 
-" Save the current layout
-:SaveSession
+" Save the current layout as a new session
+:BufstateSaveAs
 " (Enter name in the prompt, e.g., "my-workspace")
 
+" Make some changes...
+" Quick save to current session
+:BufstateSave
+" (Overwrites "my-workspace" without prompting)
+
 " Later, restore your workspace
-:LoadSession
+:BufstateLoad
 " (Select "my-workspace" from the picker)
+
+" Save with a different name
+:BufstateSaveAs another-workspace
 ```
 
 ### Lua API
 
 ```lua
-local ws = require("bufstate")
+local bufstate = require("bufstate")
 
 -- Save session
-ws.save("my-session")       -- Save with name
-ws.save()                   -- Prompt for name
+bufstate.save()                 -- Save current session (or prompt if none active)
+bufstate.save_as("my-session")  -- Save as new session with name
+bufstate.save_as()              -- Save as new session (prompt for name)
 
 -- Load session
-ws.load("my-session")       -- Load specific session
-ws.load()                   -- Show picker
+bufstate.load("my-session")     -- Load specific session
+bufstate.load()                 -- Show picker
 
 -- Delete session
-ws.delete("my-session")     -- Delete specific session
-ws.delete()                 -- Show picker
+bufstate.delete("my-session")   -- Delete specific session
+bufstate.delete()               -- Show picker
+
+-- New session
+bufstate.new("my-session")      -- Start new session with name
+bufstate.new()                  -- Start new session (prompt for name)
 
 -- List all sessions
-ws.list()                   -- Print to command line
+bufstate.list()                 -- Print to command line
 
 -- Get all sessions programmatically
 local storage = require("bufstate.storage")
 local sessions = storage.list()
 
 -- Autosave functions
-ws.autosave()               -- Trigger autosave now
-ws.autosave_pause()         -- Pause autosave
-ws.autosave_resume()        -- Resume autosave
-ws.autosave_status()        -- Show autosave status
-ws.get_current_session()    -- Get current session name
+bufstate.autosave()             -- Trigger autosave now
+bufstate.autosave_pause()       -- Pause autosave
+bufstate.autosave_resume()      -- Resume autosave
+bufstate.autosave_status()      -- Show autosave status
+bufstate.get_current_session()  -- Get current session name
 ```
 
 ## Autosave

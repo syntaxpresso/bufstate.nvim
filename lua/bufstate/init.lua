@@ -9,21 +9,34 @@ local M = {}
 -- State tracking
 local current_session = nil
 
--- Save the current workspace session
-function M.save(name)
+-- Save the current workspace session (overwrites current session)
+function M.save()
+	if current_session then
+		-- Save to current session
+		local data = session.capture()
+		storage.save(current_session, data)
+		vim.notify("Session saved: " .. current_session, vim.log.levels.INFO)
+	else
+		-- No current session, prompt for name (behaves like save_as)
+		M.save_as()
+	end
+end
+
+-- Save the current workspace session with a new name
+function M.save_as(name)
 	if name then
 		-- Name provided directly
 		local data = session.capture()
 		storage.save(name, data)
 		current_session = name
-		vim.notify("Session saved: " .. name, vim.log.levels.INFO)
+		vim.notify("Session saved as: " .. name, vim.log.levels.INFO)
 	else
 		-- Prompt for name using snacks.input
 		ui.prompt_session_name(function(session_name)
 			local data = session.capture()
 			storage.save(session_name, data)
 			current_session = session_name
-			vim.notify("Session saved: " .. session_name, vim.log.levels.INFO)
+			vim.notify("Session saved as: " .. session_name, vim.log.levels.INFO)
 		end, { prompt = "Save session as: " })
 	end
 end

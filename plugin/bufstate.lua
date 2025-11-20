@@ -17,8 +17,76 @@ vim.api.nvim_create_autocmd("VimEnter", {
 })
 
 -- Define user commands
+vim.api.nvim_create_user_command("BufstateSave", function()
+	require("bufstate").save()
+end, {})
+
+vim.api.nvim_create_user_command("BufstateSaveAs", function(opts)
+	require("bufstate").save_as(opts.args ~= "" and opts.args or nil)
+end, {
+	nargs = "?",
+	complete = function(arg_lead)
+		local storage = require("bufstate.storage")
+		local sessions = storage.list()
+		local names = {}
+		for _, session in ipairs(sessions) do
+			if vim.startswith(session.name, arg_lead) then
+				table.insert(names, session.name)
+			end
+		end
+		return names
+	end,
+})
+
+vim.api.nvim_create_user_command("BufstateLoad", function(opts)
+	require("bufstate").load(opts.args ~= "" and opts.args or nil)
+end, {
+	nargs = "?",
+	complete = function(arg_lead)
+		local storage = require("bufstate.storage")
+		local sessions = storage.list()
+		local names = {}
+		for _, session in ipairs(sessions) do
+			if vim.startswith(session.name, arg_lead) then
+				table.insert(names, session.name)
+			end
+		end
+		return names
+	end,
+})
+
+vim.api.nvim_create_user_command("BufstateDelete", function(opts)
+	require("bufstate").delete(opts.args ~= "" and opts.args or nil)
+end, {
+	nargs = "?",
+	complete = function(arg_lead)
+		local storage = require("bufstate.storage")
+		local sessions = storage.list()
+		local names = {}
+		for _, session in ipairs(sessions) do
+			if vim.startswith(session.name, arg_lead) then
+				table.insert(names, session.name)
+			end
+		end
+		return names
+	end,
+})
+
+vim.api.nvim_create_user_command("BufstateList", function()
+	require("bufstate").list()
+end, {})
+
+vim.api.nvim_create_user_command("BufstateNew", function(opts)
+	require("bufstate").new(opts.args ~= "" and opts.args or nil)
+end, { nargs = "?" })
+
+-- Legacy commands (for backward compatibility)
 vim.api.nvim_create_user_command("SaveSession", function(opts)
-	require("bufstate").save(opts.args ~= "" and opts.args or nil)
+	if opts.args ~= "" then
+		require("bufstate").save_as(opts.args)
+	else
+		require("bufstate").save()
+	end
 end, {
 	nargs = "?",
 	complete = function(arg_lead)
@@ -95,8 +163,9 @@ end, {})
 
 -- Default keymaps (can be disabled by setting g:bufstate_no_default_maps = 1)
 if not vim.g.bufstate_no_default_maps then
-	vim.keymap.set("n", "<leader>qs", ":SaveSession<CR>", { desc = "Save current session" })
-	vim.keymap.set("n", "<leader>ql", ":LoadSession<CR>", { desc = "Load session" })
-	vim.keymap.set("n", "<leader>qd", ":DeleteSession<CR>", { desc = "Delete session" })
-	vim.keymap.set("n", "<leader>qn", ":NewSession<CR>", { desc = "New session" })
+	vim.keymap.set("n", "<leader>qs", ":BufstateSave<CR>", { desc = "Save session" })
+	vim.keymap.set("n", "<leader>qS", ":BufstateSaveAs<CR>", { desc = "Save session as" })
+	vim.keymap.set("n", "<leader>ql", ":BufstateLoad<CR>", { desc = "Load session" })
+	vim.keymap.set("n", "<leader>qd", ":BufstateDelete<CR>", { desc = "Delete session" })
+	vim.keymap.set("n", "<leader>qn", ":BufstateNew<CR>", { desc = "New session" })
 end
