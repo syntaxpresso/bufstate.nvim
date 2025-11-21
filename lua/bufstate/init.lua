@@ -54,7 +54,7 @@ function M.load(name)
 		-- Name provided directly
 		local data, err = storage.load(name)
 		if not data then
-			vim.notify(err, vim.log.levels.ERROR)
+			vim.notify(err or "Failed to load session", vim.log.levels.ERROR)
 			return
 		end
 
@@ -68,7 +68,7 @@ function M.load(name)
 		ui.show_session_picker(sessions, function(selected)
 			local data, err = storage.load(selected.name)
 			if not data then
-				vim.notify(err, vim.log.levels.ERROR)
+				vim.notify(err or "Failed to load session", vim.log.levels.ERROR)
 				return
 			end
 
@@ -86,7 +86,7 @@ function M.delete(name)
 		-- Name provided directly
 		local ok, err = storage.delete(name)
 		if not ok then
-			vim.notify(err, vim.log.levels.ERROR)
+			vim.notify(err or "Failed to delete session", vim.log.levels.ERROR)
 			return
 		end
 		-- If we deleted the current session, reset to nil
@@ -100,7 +100,7 @@ function M.delete(name)
 		ui.show_session_picker(sessions, function(selected)
 			local ok, err = storage.delete(selected.name)
 			if not ok then
-				vim.notify(err, vim.log.levels.ERROR)
+				vim.notify(err or "Failed to delete session", vim.log.levels.ERROR)
 				return
 			end
 			-- If we deleted the current session, reset to nil
