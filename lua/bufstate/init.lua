@@ -59,9 +59,21 @@ function M.load(name)
 			return
 		end
 
-		-- Now show picker using snacks.picker
+		-- Now show picker using snacks.picker (exclude current session)
 		local sessions = storage.list()
-		ui.show_session_picker(sessions, function(selected)
+		local filtered_sessions = {}
+		for _, s in ipairs(sessions) do
+			if s.name ~= current_session then
+				table.insert(filtered_sessions, s)
+			end
+		end
+		
+		if #filtered_sessions == 0 then
+			vim.notify("No other sessions available", vim.log.levels.WARN)
+			return
+		end
+		
+		ui.show_session_picker(filtered_sessions, function(selected)
 			local ok, load_err = session.load(selected.name, current_session)
 			if not ok then
 				vim.notify(load_err or "Failed to load session", vim.log.levels.ERROR)
