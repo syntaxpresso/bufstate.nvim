@@ -54,12 +54,12 @@ function M.save(name)
 					end
 				end
 
-			-- Delete buffer if it doesn't belong to session
-			if not belongs_to_session then
-				pcall(function()
-					vim.cmd("silent! bdelete " .. bufnr)
-				end)
-			end
+				-- Delete buffer if it doesn't belong to session
+				if not belongs_to_session then
+					pcall(function()
+						vim.cmd("silent! bdelete " .. bufnr)
+					end)
+				end
 			end
 		end
 	end
@@ -94,6 +94,31 @@ local function has_modified_buffers()
 	return modified
 end
 
+-- Check and handle modified buffers before loading a session
+-- Returns true if we can proceed, false if cancelled, or error message
+function M.handle_modified_buffers()
+	local modified = has_modified_buffers()
+	for _, buf in ipairs(modified) do
+		local display_name = vim.fn.fnamemodify(buf.name, ":~:.")
+		local msg = string.format('Save changes to "%s"?', display_name)
+
+		local choice = vim.fn.confirm(msg, "&Save\n&Discard\n&Cancel", 1)
+
+		if choice == 1 then -- Save
+			local ok = pcall(vim.api.nvim_buf_call, buf.bufnr, function()
+				vim.cmd("write")
+			end)
+			if not ok then
+				return nil, "Failed to save buffer: " .. buf.name
+			end
+		elseif choice == 3 or choice == 0 then -- Cancel or ESC
+			return nil, "Session load cancelled"
+		end
+		-- choice == 2 (Discard) continues to next buffer
+	end
+	return true
+end
+
 -- Load workspace using :source
 function M.load(name, current_session_name)
 	local storage = require("bufstate.storage")
@@ -109,39 +134,13 @@ function M.load(name, current_session_name)
 		end
 	end
 
-	-- Step 2: Check for modified buffers after saving current session
-	local modified_buffers = has_modified_buffers()
-	if #modified_buffers > 0 then
-		local buf_list = {}
-		for _, buf in ipairs(modified_buffers) do
-			table.insert(buf_list, "  - " .. vim.fn.fnamemodify(buf.name, ":~:."))
-		end
-
-		local choice = vim.fn.confirm(
-			"You have unsaved changes in:\n" .. table.concat(buf_list, "\n") .. "\n\nWhat would you like to do?",
-			"&Save All\n&Abandon Changes\n&Cancel",
-			3 -- default to Cancel
-		)
-
-		if choice == 1 then
-		-- Save all modified buffers
-		for _, buf in ipairs(modified_buffers) do
-			if vim.api.nvim_buf_is_valid(buf.bufnr) then
-				vim.api.nvim_buf_call(buf.bufnr, function()
-					pcall(function()
-						vim.cmd("write")
-					end)
-				end)
-			end
-		end
-		elseif choice == 3 or choice == 0 then
-			-- Cancel (choice == 0 means user pressed Esc)
-			return nil, "Load cancelled by user"
-		end
-		-- choice == 2 means abandon changes, continue with load
+	-- Step 2: Wipe all buffers with force (modified buffers already handled)
+	local buffers = vim.api.nvim_list_bufs()
+	for _, buf in ipairs(buffers) do
+		pcall(vim.api.nvim_buf_delete, buf, { force = true })
 	end
 
-	-- Step 3: Load the vim session file (storage.load handles buffer cleanup)
+	-- Step 3: Load the vim session file
 	local ok, err = storage.load(name)
 	if not ok then
 		return nil, err

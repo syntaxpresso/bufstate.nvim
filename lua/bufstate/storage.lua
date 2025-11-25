@@ -37,6 +37,7 @@ function M.save(name)
 	return true
 end
 
+--
 -- Load session using :source
 function M.load(name)
 	local path = M.get_session_path(name)

@@ -52,12 +52,19 @@ function M.load(name)
 		storage.save_last_loaded(name)
 		vim.notify("Session loaded: " .. name, vim.log.levels.INFO)
 	else
-		-- Show picker using snacks.picker
+		-- Handle modified buffers BEFORE showing picker
+		local can_proceed, err = session.handle_modified_buffers()
+		if not can_proceed then
+			vim.notify(err or "Session load cancelled", vim.log.levels.WARN)
+			return
+		end
+
+		-- Now show picker using snacks.picker
 		local sessions = storage.list()
 		ui.show_session_picker(sessions, function(selected)
-			local ok, err = session.load(selected.name, current_session)
+			local ok, load_err = session.load(selected.name, current_session)
 			if not ok then
-				vim.notify(err or "Failed to load session", vim.log.levels.ERROR)
+				vim.notify(load_err or "Failed to load session", vim.log.levels.ERROR)
 				return
 			end
 
