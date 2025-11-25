@@ -67,12 +67,12 @@ function M.load(name)
 				table.insert(filtered_sessions, s)
 			end
 		end
-		
+
 		if #filtered_sessions == 0 then
 			vim.notify("No other sessions available", vim.log.levels.WARN)
 			return
 		end
-		
+
 		ui.show_session_picker(filtered_sessions, function(selected)
 			local ok, load_err = session.load(selected.name, current_session)
 			if not ok then
