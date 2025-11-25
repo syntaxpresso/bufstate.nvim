@@ -13,8 +13,7 @@ local current_session = nil
 function M.save()
 	if current_session then
 		-- Save to current session
-		local data = session.capture()
-		storage.save(current_session, data)
+		session.save(current_session)
 		vim.notify("Session saved: " .. current_session, vim.log.levels.INFO)
 	else
 		-- No current session, prompt for name (behaves like save_as)
@@ -26,15 +25,13 @@ end
 function M.save_as(name)
 	if name then
 		-- Name provided directly
-		local data = session.capture()
-		storage.save(name, data)
+		session.save(name)
 		current_session = name
 		vim.notify("Session saved as: " .. name, vim.log.levels.INFO)
 	else
 		-- Prompt for name using snacks.input
 		ui.prompt_session_name(function(session_name)
-			local data = session.capture()
-			storage.save(session_name, data)
+			session.save(session_name)
 			current_session = session_name
 			vim.notify("Session saved as: " .. session_name, vim.log.levels.INFO)
 		end, { prompt = "Save session as: " })
@@ -43,22 +40,14 @@ end
 
 -- Load a workspace session
 function M.load(name)
-	-- Save current session before loading a new one (only if a session is active)
-	if current_session then
-		local current_data = session.capture()
-		storage.save(current_session, current_data)
-		vim.notify("Current session saved: " .. current_session, vim.log.levels.INFO)
-	end
-
 	if name then
 		-- Name provided directly
-		local data, err = storage.load(name)
-		if not data then
+		local ok, err = session.load(name, current_session)
+		if not ok then
 			vim.notify(err or "Failed to load session", vim.log.levels.ERROR)
 			return
 		end
 
-		session.restore(data)
 		current_session = name
 		storage.save_last_loaded(name)
 		vim.notify("Session loaded: " .. name, vim.log.levels.INFO)
@@ -66,13 +55,12 @@ function M.load(name)
 		-- Show picker using snacks.picker
 		local sessions = storage.list()
 		ui.show_session_picker(sessions, function(selected)
-			local data, err = storage.load(selected.name)
-			if not data then
+			local ok, err = session.load(selected.name, current_session)
+			if not ok then
 				vim.notify(err or "Failed to load session", vim.log.levels.ERROR)
 				return
 			end
 
-			session.restore(data)
 			current_session = selected.name
 			storage.save_last_loaded(selected.name)
 			vim.notify("Session loaded: " .. selected.name, vim.log.levels.INFO)
@@ -137,8 +125,7 @@ end
 function M.new(name)
 	-- Save current session before starting new one (only if a session is active)
 	if current_session then
-		local current_data = session.capture()
-		storage.save(current_session, current_data)
+		session.save(current_session)
 		vim.notify("Current session saved: " .. current_session, vim.log.levels.INFO)
 	end
 
@@ -216,9 +203,8 @@ function M.setup(opts)
 					if not has_args then
 						local latest = storage.get_latest_session()
 						if latest then
-							local data, err = storage.load(latest)
-							if data then
-								session.restore(data)
+							local ok, err = session.load(latest)
+							if ok then
 								current_session = latest
 								vim.notify("Session auto-loaded: " .. latest, vim.log.levels.INFO)
 							else

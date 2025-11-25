@@ -37,7 +37,6 @@ local function buffer_belongs_to_tab(bufnr, tabnr)
 		end
 	end
 
-	-- Check if path under tab's cwd (from session.lua:49-54)
 	local cwd = vim.fn.getcwd(-1, tabnr)
 	if vim.startswith(bufname, cwd .. "/") or bufname == cwd then
 		return true

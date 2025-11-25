@@ -29,10 +29,10 @@ local function preview_session(ctx)
 	ctx.preview:reset()
 	ctx.preview:minimal()
 
-	-- Load the session data
-	local session_data = storage.load(ctx.item.session.name)
-	if not session_data then
-		ctx.preview:notify("Failed to load session data", "error")
+	-- Parse the vim session file for metadata
+	local metadata = storage.parse_session_metadata(ctx.item.session.name)
+	if not metadata then
+		ctx.preview:notify("Failed to parse session file", "error")
 		return
 	end
 
@@ -41,37 +41,32 @@ local function preview_session(ctx)
 	table.insert(lines, "# Session: " .. ctx.item.session.name)
 	table.insert(lines, "")
 	table.insert(lines, "**Modified:** " .. os.date("%Y-%m-%d %H:%M:%S", ctx.item.session.modified))
-	table.insert(lines, "**Tabs:** " .. #session_data.tabs)
+	table.insert(lines, "**Tabs:** " .. metadata.tab_count)
+	table.insert(lines, "**Buffers:** " .. #metadata.buffers)
 
-	-- Count total buffers
-	local total_buffers = 0
-	for _, tab in ipairs(session_data.tabs) do
-		if tab.buffers then
-			total_buffers = total_buffers + #tab.buffers
+	-- Show working directories
+	if #metadata.cwd_list > 0 then
+		table.insert(lines, "")
+		table.insert(lines, "## Working Directories")
+		table.insert(lines, "")
+		for i, cwd in ipairs(metadata.cwd_list) do
+			table.insert(lines, string.format("%d. `%s`", i, cwd))
 		end
 	end
-	if total_buffers > 0 then
-		table.insert(lines, "**Buffers:** " .. total_buffers)
-	end
 
-	table.insert(lines, "")
-	table.insert(lines, "## Workspaces")
-	table.insert(lines, "")
-
-	for i, tab in ipairs(session_data.tabs) do
-		local buf_count = tab.buffers and #tab.buffers or 0
-		if buf_count > 0 then
-			table.insert(
-				lines,
-				string.format("%d. `%s` (%d buffer%s)", i, tab.cwd, buf_count, buf_count == 1 and "" or "s")
-			)
-			-- Show buffer list
-			for _, buf in ipairs(tab.buffers) do
-				local filename = vim.fn.fnamemodify(buf.path, ":t")
-				table.insert(lines, string.format("   - %s", filename))
-			end
-		else
-			table.insert(lines, string.format("%d. `%s`", i, tab.cwd))
+	-- Show buffer list (limited to first 20 to avoid huge previews)
+	if #metadata.buffers > 0 then
+		table.insert(lines, "")
+		table.insert(lines, "## Buffers")
+		table.insert(lines, "")
+		local max_show = math.min(20, #metadata.buffers)
+		for i = 1, max_show do
+			local buf_path = metadata.buffers[i]
+			local filename = vim.fn.fnamemodify(buf_path, ":t")
+			table.insert(lines, string.format("- %s", filename))
+		end
+		if #metadata.buffers > 20 then
+			table.insert(lines, string.format("- ... and %d more", #metadata.buffers - 20))
 		end
 	end
 

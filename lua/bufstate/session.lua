@@ -1,224 +1,163 @@
 -- Session management module
 local M = {}
 
--- Capture the current workspace state (all tabs and their root directories)
-function M.capture()
+-- Save current workspace using :mksession!
+function M.save(name)
+	local storage = require("bufstate.storage")
 	local tabfilter = require("bufstate.tabfilter")
 
-	-- Update timestamps for current tab and buffer BEFORE capturing
+	-- Update timestamps for current tab and buffer
 	tabfilter.update_current_timestamps()
 
-	local tabs = {}
+	-- Step 1: Collect all tab working directories
+	local tab_cwds = {}
 	local tab_count = vim.fn.tabpagenr("$")
-	local current_tab = vim.fn.tabpagenr()
-	local current_win = vim.fn.winnr()
+	for tabnr = 1, tab_count do
+		local cwd = vim.fn.getcwd(-1, tabnr)
+		tab_cwds[cwd] = true
+	end
 
-	for i = 1, tab_count do
-		-- Switch to each tab to get its info
-		vim.cmd("tabnext " .. i)
+	-- Step 2: Collect buffers that are visible in any window split
+	-- These must always be kept regardless of their path
+	local visible_buffers = {}
+	for tabnr = 1, tab_count do
+		local wins = vim.fn.tabpagewinnr(tabnr, "$")
+		for w = 1, wins do
+			local win_id = vim.fn.win_getid(w, tabnr)
+			local bufnr = vim.fn.winbufnr(win_id)
+			if bufnr > 0 then
+				visible_buffers[bufnr] = true
+			end
+		end
+	end
 
-		-- Get the tab-local directory (tcd)
-		local cwd = vim.fn.getcwd(-1, i)
+	-- Step 3: Delete buffers that don't belong to any tab's working directory
+	for _, bufnr in ipairs(vim.api.nvim_list_bufs()) do
+		if vim.api.nvim_buf_is_valid(bufnr) then
+			local bufname = vim.api.nvim_buf_get_name(bufnr)
+			local buftype = vim.api.nvim_get_option_value("buftype", { buf = bufnr })
 
-		-- Get ALL buffers (not just listed ones - critical for tab filtering)
-		local buffers = {}
-		local seen = {}
-		local buffer_index = 1
+			-- Only check real file buffers
+			if bufname ~= "" and buftype == "" then
+				local belongs_to_session = false
 
-		-- Get all buffers globally - REMOVED buflisted check to capture all buffers
-		for _, bufnr in ipairs(vim.api.nvim_list_bufs()) do
-			if vim.api.nvim_buf_is_valid(bufnr) then
-				local bufname = vim.api.nvim_buf_get_name(bufnr)
-				local buftype = vim.api.nvim_get_option_value("buftype", { buf = bufnr })
-
-				-- Only save real files (not special buffers like terminal, quickfix, etc.)
-				if bufname ~= "" and buftype == "" and vim.fn.filereadable(bufname) == 1 then
-					-- Check if buffer belongs to this tab by checking if its path is under the tab's cwd
-					-- or if it's currently displayed in this tab
-					local is_in_tab = false
-					local cursor_line = 1
-					local cursor_col = 1
-
-					-- Check if buffer is displayed in any window of this tab
-					local wins = vim.fn.tabpagewinnr(i, "$")
-					for w = 1, wins do
-						local win_id = vim.fn.win_getid(w, i)
-						local win_bufnr = vim.fn.winbufnr(win_id)
-						if win_bufnr == bufnr then
-							is_in_tab = true
-							cursor_line = vim.fn.line(".", win_id)
-							cursor_col = vim.fn.col(".", win_id)
+				-- Always keep if visible in any window
+				if visible_buffers[bufnr] then
+					belongs_to_session = true
+				else
+					-- Check if buffer path starts with any tab's cwd
+					for cwd, _ in pairs(tab_cwds) do
+						if vim.startswith(bufname, cwd .. "/") or bufname == cwd then
+							belongs_to_session = true
 							break
 						end
 					end
-
-					-- If not visible, check if the buffer path is under this tab's cwd
-					if not is_in_tab then
-						if vim.startswith(bufname, cwd .. "/") or bufname == cwd then
-							is_in_tab = true
-						end
-					end
-
-					if is_in_tab and not seen[bufnr] then
-						seen[bufnr] = true
-						-- Store relative path if inside cwd, otherwise absolute
-						local relative = vim.fn.fnamemodify(bufname, ":.")
-						local path = vim.startswith(relative, "/") and bufname or relative
-
-						table.insert(buffers, {
-							path = path,
-							line = cursor_line,
-							col = cursor_col,
-							timestamp = tabfilter.get_buffer_timestamp(bufnr) or os.time(),
-							index = buffer_index,
-						})
-						buffer_index = buffer_index + 1
-					end
 				end
+
+			-- Delete buffer if it doesn't belong to session
+			if not belongs_to_session then
+				pcall(function()
+					vim.cmd("silent! bdelete " .. bufnr)
+				end)
 			end
-		end
-
-		table.insert(tabs, {
-			index = i,
-			cwd = cwd,
-			buffers = buffers,
-			timestamp = tabfilter.get_tab_timestamp(i) or os.time(),
-		})
-	end
-
-	-- Return to original tab and window
-	vim.cmd("tabnext " .. current_tab)
-	vim.cmd(current_win .. "wincmd w")
-
-	-- Sort tabs by index (preserve tab order)
-	table.sort(tabs, function(a, b)
-		return a.index < b.index
-	end)
-
-	-- Find the most recently active tab to mark for focus
-	local most_recent_tab_idx = 1
-	local most_recent_tab_time = 0
-	for idx, tab in ipairs(tabs) do
-		if (tab.timestamp or 0) > most_recent_tab_time then
-			most_recent_tab_time = tab.timestamp or 0
-			most_recent_tab_idx = idx
+			end
 		end
 	end
 
-	-- Sort buffers within each tab by index (preserve buffer list order)
-	for _, tab in ipairs(tabs) do
-		table.sort(tab.buffers, function(a, b)
-			-- If both have index, sort by index (lower index = earlier in list)
-			if a.index and b.index then
-				return a.index < b.index
-			end
-			-- Fallback to timestamp for backward compatibility with old sessions
-			return (a.timestamp or 0) > (b.timestamp or 0)
-		end)
+	-- Step 4: Save using :mksession! (only session buffers remain)
+	local ok, err = pcall(storage.save, name)
 
-		-- Find the most recently active buffer to mark for focus
-		local most_recent_idx = 1
-		local most_recent_time = 0
-		for idx, buf in ipairs(tab.buffers) do
-			if (buf.timestamp or 0) > most_recent_time then
-				most_recent_time = buf.timestamp or 0
-				most_recent_idx = idx
-			end
-		end
-		tab.active_buffer_index = most_recent_idx
+	if not ok then
+		error(err)
 	end
 
-	return {
-		tabs = tabs,
-		active_tab_index = most_recent_tab_idx,
-		version = 3, -- Bump version for timestamp support
-		timestamp = os.time(),
-	}
+	return true
 end
 
--- Restore a workspace session
-function M.restore(session_data)
-	if not session_data or not session_data.tabs then
-		error("Invalid session data")
-	end
+-- Check if there are any modified buffers
+local function has_modified_buffers()
+	local modified = {}
+	for _, bufnr in ipairs(vim.api.nvim_list_bufs()) do
+		if vim.api.nvim_buf_is_valid(bufnr) then
+			local bufname = vim.api.nvim_buf_get_name(bufnr)
+			local buftype = vim.api.nvim_get_option_value("buftype", { buf = bufnr })
 
-	local tabfilter = require("bufstate.tabfilter")
-
-	-- Close all tabs except the first one
-	vim.cmd("tabonly")
-
-	-- Close all buffers in the first tab
-	vim.cmd("silent! %bdelete")
-
-	-- Restore each tab with its directory and buffers
-	-- Note: tabs are already sorted by timestamp (most recent first) from capture()
-	for i, tab in ipairs(session_data.tabs) do
-		-- Restore buffers if available (version 2+)
-		-- Note: buffers are sorted by index (preserving original order) from capture()
-		if tab.buffers and #tab.buffers > 0 then
-			local active_idx = tab.active_buffer_index or 1
-			local active_buf_data = nil
-
-			if i == 1 then
-				-- First tab already exists, just set its directory
-				vim.cmd("tcd " .. vim.fn.fnameescape(tab.cwd))
-			else
-				-- Create new tab with the first buffer to avoid [No Name]
-				vim.cmd("tabnew")
-				-- Set tab-local directory
-				vim.cmd("tcd " .. vim.fn.fnameescape(tab.cwd))
-			end
-
-			-- First pass: Load all buffers in order using :badd to preserve order
-			for j, buf in ipairs(tab.buffers) do
-				local path = buf.path
-				-- Make path absolute if relative
-				if not vim.startswith(path, "/") then
-					path = tab.cwd .. "/" .. path
-				end
-
-				-- Load buffer without displaying
-				vim.cmd("badd " .. vim.fn.fnameescape(path))
-
-				-- Set buflisted=false for all initially
-				local bufnr = vim.fn.bufnr(path)
-				if bufnr ~= -1 then
-					vim.bo[bufnr].buflisted = false
-				end
-
-				-- Remember the active buffer data for later
-				if j == active_idx then
-					active_buf_data = { path = path, line = buf.line, col = buf.col }
-				end
-			end
-
-			-- Second pass: Switch to the active buffer and restore cursor
-			if active_buf_data then
-				vim.cmd("buffer " .. vim.fn.fnameescape(active_buf_data.path))
-				vim.fn.cursor(active_buf_data.line or 1, active_buf_data.col or 1)
-			end
-
-			-- Delete all [No Name] buffers created during tab initialization
-			for _, bufnr in ipairs(vim.api.nvim_list_bufs()) do
-				if vim.api.nvim_buf_is_valid(bufnr) then
-					local bufname = vim.api.nvim_buf_get_name(bufnr)
-					if bufname == "" then
-						vim.cmd("silent! bdelete " .. bufnr)
-					end
-				end
+			-- Check real file buffers that are modified
+			if bufname ~= "" and buftype == "" and vim.bo[bufnr].modified then
+				table.insert(modified, {
+					bufnr = bufnr,
+					name = bufname,
+				})
 			end
 		end
 	end
+	return modified
+end
 
-	-- Rebuild buffer-tab mapping
-	tabfilter.rebuild_mapping()
+-- Load workspace using :source
+function M.load(name, current_session_name)
+	local storage = require("bufstate.storage")
+	local tabfilter = require("bufstate.tabfilter")
 
-	-- Switch to the most recently active tab (or first tab if not specified)
-	local active_tab = session_data.active_tab_index or 1
-	vim.cmd("tabnext " .. active_tab)
+	-- Step 1: Save current session if provided
+	if current_session_name then
+		local ok, err = pcall(M.save, current_session_name)
+		if ok then
+			vim.notify("Current session saved: " .. current_session_name, vim.log.levels.INFO)
+		else
+			vim.notify("Warning: Failed to save current session: " .. (err or "unknown error"), vim.log.levels.WARN)
+		end
+	end
 
-	-- Set buflisted=true only for current tab's buffers
-	tabfilter.update_buflisted(active_tab)
+	-- Step 2: Check for modified buffers after saving current session
+	local modified_buffers = has_modified_buffers()
+	if #modified_buffers > 0 then
+		local buf_list = {}
+		for _, buf in ipairs(modified_buffers) do
+			table.insert(buf_list, "  - " .. vim.fn.fnamemodify(buf.name, ":~:."))
+		end
+
+		local choice = vim.fn.confirm(
+			"You have unsaved changes in:\n" .. table.concat(buf_list, "\n") .. "\n\nWhat would you like to do?",
+			"&Save All\n&Abandon Changes\n&Cancel",
+			3 -- default to Cancel
+		)
+
+		if choice == 1 then
+		-- Save all modified buffers
+		for _, buf in ipairs(modified_buffers) do
+			if vim.api.nvim_buf_is_valid(buf.bufnr) then
+				vim.api.nvim_buf_call(buf.bufnr, function()
+					pcall(function()
+						vim.cmd("write")
+					end)
+				end)
+			end
+		end
+		elseif choice == 3 or choice == 0 then
+			-- Cancel (choice == 0 means user pressed Esc)
+			return nil, "Load cancelled by user"
+		end
+		-- choice == 2 means abandon changes, continue with load
+	end
+
+	-- Step 3: Kill ALL buffers using :1,$bw
+	vim.cmd("silent! 1,$bwipeout!")
+
+	-- Step 4: Load the vim session file
+	local ok, err = storage.load(name)
+	if not ok then
+		return nil, err
+	end
+
+	-- Step 5: Rebuild tab filtering and update buflisted
+	vim.schedule(function()
+		tabfilter.rebuild_mapping()
+		local current_tab = vim.fn.tabpagenr()
+		tabfilter.update_buflisted(current_tab)
+	end)
+
+	return true
 end
 
 return M

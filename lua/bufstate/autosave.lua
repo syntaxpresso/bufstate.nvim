@@ -42,16 +42,13 @@ function M.perform_autosave()
 	-- Get current session name
 	local session_name = get_current_session() or "_autosave"
 
-	-- Perform silent save
-	local ok = pcall(require, "bufstate")
-	if ok then
-		-- Save silently (don't show notification)
+	-- Perform silent save using new session.save method
+	local ok, _ = pcall(function()
 		local session_mod = require("bufstate.session")
-		local storage_mod = require("bufstate.storage")
+		session_mod.save(session_name)
+	end)
 
-		local data = session_mod.capture()
-		storage_mod.save(session_name, data)
-
+	if ok then
 		last_save_time = now
 	end
 end
