@@ -19,7 +19,9 @@ Stop juggling between tmux sessions and Neovim. **bufstate.nvim** brings the pow
 - **🪟 Window splits** - Restore your exact window layout using Neovim's native `:mksession`
 - **🔄 Context switching** - Jump between projects faster than tmux sessions
 
-**Think of it as:** tmux sessions + vim-obsession.
+**Think of it as:** tmux sessions + vim-obsession, built on Vim's native `:mksession` command.
+
+> **Note:** bufstate uses Vim's native `:mksession` under the hood for reliable session persistence. All sessions are stored as standard `.vim` session files.
 
 https://github.com/user-attachments/assets/9162f9a5-8576-4f95-b01b-0f2a1ab10f17
 
