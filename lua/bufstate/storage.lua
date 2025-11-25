@@ -27,7 +27,9 @@ function M.save(name)
 	local path = M.get_session_path(name)
 
 	-- Use :mksession! to generate vim session file
-	local ok, err = pcall(vim.cmd, "mksession! " .. vim.fn.fnameescape(path))
+	local ok, err = pcall(function()
+		vim.cmd("mksession! " .. vim.fn.fnameescape(path))
+	end)
 	if not ok then
 		error("Failed to save session: " .. (err or "unknown error"))
 	end
@@ -45,15 +47,17 @@ function M.load(name)
 
 	-- Explicitly clean up before loading session
 	-- This ensures no buffers from current Neovim instance leak into the session
-	vim.cmd("silent! %bdelete")
+	vim.cmd("silent! %bdelete!")
 	vim.cmd("silent! tabonly")
 
 	-- Set a flag to indicate we're loading a bufstate session
 	vim.g.bufstate_loading_session = true
 
 	-- Source the vim session file
-	local ok, err = pcall(vim.cmd, "source " .. vim.fn.fnameescape(path))
-	
+	local ok, err = pcall(function()
+		vim.cmd("source " .. vim.fn.fnameescape(path))
+	end)
+
 	-- Clear the loading flag
 	vim.g.bufstate_loading_session = false
 

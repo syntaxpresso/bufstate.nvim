@@ -141,16 +141,13 @@ function M.load(name, current_session_name)
 		-- choice == 2 means abandon changes, continue with load
 	end
 
-	-- Step 3: Kill ALL buffers using :1,$bw
-	vim.cmd("silent! 1,$bwipeout!")
-
-	-- Step 4: Load the vim session file
+	-- Step 3: Load the vim session file (storage.load handles buffer cleanup)
 	local ok, err = storage.load(name)
 	if not ok then
 		return nil, err
 	end
 
-	-- Step 5: Rebuild tab filtering and update buflisted
+	-- Step 4: Rebuild tab filtering and update buflisted
 	vim.schedule(function()
 		tabfilter.rebuild_mapping()
 		local current_tab = vim.fn.tabpagenr()
