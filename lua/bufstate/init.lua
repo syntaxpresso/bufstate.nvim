@@ -115,7 +115,7 @@ function M.delete(name)
 				current_session = nil
 			end
 			vim.notify("Session deleted: " .. selected.name, vim.log.levels.INFO)
-		end, { prompt = "Delete Session" })
+		end, { prompt = "Session to delete: " })
 	end
 end
 
