@@ -374,6 +374,9 @@ require("bufstate").setup({
   
   -- Stop LSP servers when loading a session (prevents LSP accumulation)
   stop_lsp_on_session_load = true, -- Default: true
+  
+  -- Suppress "quit with exit code 143" LSP messages
+  suppress_lsp_exit_messages = true, -- Default: true
 
   -- Auto-load last session on startup
   autoload_last_session = true,   -- Default: false

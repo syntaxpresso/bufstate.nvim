@@ -3,6 +3,7 @@ local storage = require("bufstate.storage")
 local session = require("bufstate.session")
 local ui = require("bufstate.ui")
 local tabfilter = require("bufstate.tabfilter")
+local lsp_handler = require("bufstate.lsp_handler")
 
 local M = {}
 
@@ -211,6 +212,11 @@ function M.setup(opts)
 	-- Setup session management with LSP config
 	session.setup({
 		stop_lsp_on_session_load = opts.stop_lsp_on_session_load,
+	})
+
+	-- Setup LSP handler to suppress expected exit messages
+	lsp_handler.setup({
+		suppress_exit_messages = opts.suppress_lsp_exit_messages,
 	})
 
 	-- Always setup autosave with user config (or defaults)
