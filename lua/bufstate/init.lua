@@ -208,11 +208,6 @@ function M.setup(opts)
 		})
 	end
 
-	-- Setup session management with LSP config
-	session.setup({
-		stop_lsp_on_session_load = opts.stop_lsp_on_session_load,
-	})
-
 	-- Always setup autosave with user config (or defaults)
 	local autosave_mod = require("bufstate.autosave")
 	autosave_mod.setup(opts.autosave or {})

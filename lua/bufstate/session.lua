@@ -1,17 +1,6 @@
 -- Session management module
 local M = {}
 
--- Configuration
-local config = {
-	stop_lsp_on_session_load = true, -- Stop LSP servers when loading a session (default: true)
-}
-
--- Setup function to accept configuration
-function M.setup(opts)
-	opts = opts or {}
-	config.stop_lsp_on_session_load = opts.stop_lsp_on_session_load ~= false -- default true
-end
-
 -- Save current workspace using :mksession!
 function M.save(name)
 	local storage = require("bufstate.storage")
@@ -145,27 +134,19 @@ function M.load(name, current_session_name)
 		end
 	end
 
-	-- Step 2: Stop all LSP clients before deleting buffers (if enabled)
-	if config.stop_lsp_on_session_load then
-		local clients = vim.lsp.get_clients()
-		for _, client in ipairs(clients) do
-			vim.lsp.stop_client(client.id, true)
-		end
-	end
-
-	-- Step 3: Wipe all buffers with force (modified buffers already handled)
+	-- Step 2: Wipe all buffers with force (modified buffers already handled)
 	local buffers = vim.api.nvim_list_bufs()
 	for _, buf in ipairs(buffers) do
 		pcall(vim.api.nvim_buf_delete, buf, { force = true })
 	end
 
-	-- Step 4: Load the vim session file
+	-- Step 3: Load the vim session file
 	local ok, err = storage.load(name)
 	if not ok then
 		return nil, err
 	end
 
-	-- Step 5: Rebuild tab filtering and update buflisted
+	-- Step 4: Rebuild tab filtering and update buflisted
 	vim.schedule(function()
 		tabfilter.rebuild_mapping()
 		local current_tab = vim.fn.tabpagenr()
