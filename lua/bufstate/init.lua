@@ -202,7 +202,10 @@ function M.setup(opts)
 
 	-- Setup tab filtering (enabled by default)
 	if opts.filter_by_tab ~= false then
-		tabfilter.setup({ enabled = true })
+		tabfilter.setup({
+			enabled = true,
+			stop_lsp_on_tab_leave = opts.stop_lsp_on_tab_leave,
+		})
 	end
 
 	-- Always setup autosave with user config (or defaults)
