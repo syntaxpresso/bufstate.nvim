@@ -120,7 +120,7 @@ function M.kill_buffers_by_path(buffer_paths)
 		end
 	end
 
-	-- Handle each buffer
+	-- PHASE 1: Handle all modified buffers first (before deleting any)
 	for _, buf in ipairs(buffers_to_kill) do
 		if buf.modified then
 			-- Prompt to save if modified
@@ -129,8 +129,10 @@ function M.kill_buffers_by_path(buffer_paths)
 				return nil, err or "Operation cancelled"
 			end
 		end
+	end
 
-		-- Delete the buffer
+	-- PHASE 2: Now delete all buffers (safe - all saves/discards handled)
+	for _, buf in ipairs(buffers_to_kill) do
 		pcall(vim.api.nvim_buf_delete, buf.bufnr, { force = true })
 	end
 
