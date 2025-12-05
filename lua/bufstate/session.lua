@@ -99,10 +99,12 @@ function M.kill_buffers_by_path(buffer_paths)
 		return true -- Nothing to do
 	end
 
-	-- Build a set of paths for quick lookup
+	-- Build a set of paths for quick lookup (normalize to absolute paths)
 	local paths_to_kill = {}
 	for _, path in ipairs(buffer_paths) do
-		paths_to_kill[path] = true
+		-- Convert to absolute path for consistent comparison
+		local absolute_path = vim.fn.fnamemodify(path, ":p")
+		paths_to_kill[absolute_path] = true
 	end
 
 	-- Find buffers that match the paths
