@@ -105,28 +105,90 @@ local function has_modified_buffers()
 	return modified
 end
 
+-- Prompt user to save, discard, or cancel for a modified buffer
+-- @param bufnr number: Buffer number
+-- @param bufname string: Buffer file path
+-- @return boolean, string|nil: true if should proceed, nil + error message if cancelled
+local function prompt_save_modified_buffer(bufnr, bufname)
+	local display_name = vim.fn.fnamemodify(bufname, ":~:.")
+	local msg = string.format('Save changes to "%s"?', display_name)
+
+	local choice = vim.fn.confirm(msg, "&Save\n&Discard\n&Cancel", 1)
+
+	if choice == 1 then -- Save
+		local ok = pcall(vim.api.nvim_buf_call, bufnr, function()
+			vim.cmd("write")
+		end)
+		if not ok then
+			return nil, "Failed to save buffer: " .. bufname
+		end
+	elseif choice == 3 or choice == 0 then -- Cancel or ESC
+		return nil, "Operation cancelled"
+	end
+	-- choice == 2 (Discard) continues
+
+	return true
+end
+
 -- Check and handle modified buffers before loading a session
 -- Returns true if we can proceed, false if cancelled, or error message
 function M.handle_modified_buffers()
 	local modified = has_modified_buffers()
 	for _, buf in ipairs(modified) do
-		local display_name = vim.fn.fnamemodify(buf.name, ":~:.")
-		local msg = string.format('Save changes to "%s"?', display_name)
-
-		local choice = vim.fn.confirm(msg, "&Save\n&Discard\n&Cancel", 1)
-
-		if choice == 1 then -- Save
-			local ok = pcall(vim.api.nvim_buf_call, buf.bufnr, function()
-				vim.cmd("write")
-			end)
-			if not ok then
-				return nil, "Failed to save buffer: " .. buf.name
-			end
-		elseif choice == 3 or choice == 0 then -- Cancel or ESC
-			return nil, "Session load cancelled"
+		local ok, err = prompt_save_modified_buffer(buf.bufnr, buf.name)
+		if not ok then
+			return nil, err or "Session load cancelled"
 		end
-		-- choice == 2 (Discard) continues to next buffer
 	end
+	return true
+end
+
+-- Kill buffers by their file paths
+-- Prompts to save if buffer is modified
+-- @param buffer_paths table: Array of buffer file paths to kill
+-- @return boolean, string|nil: true if successful, or nil + error message if cancelled
+function M.kill_buffers_by_path(buffer_paths)
+	-- Create an empty buffer to prevent closing Neovim
+	vim.cmd("enew")
+	if not buffer_paths or #buffer_paths == 0 then
+		return true -- Nothing to do
+	end
+
+	-- Build a set of paths for quick lookup
+	local paths_to_kill = {}
+	for _, path in ipairs(buffer_paths) do
+		paths_to_kill[path] = true
+	end
+
+	-- Find buffers that match the paths
+	local buffers_to_kill = {}
+	for _, bufnr in ipairs(vim.api.nvim_list_bufs()) do
+		if vim.api.nvim_buf_is_valid(bufnr) then
+			local bufname = vim.api.nvim_buf_get_name(bufnr)
+			if bufname ~= "" and paths_to_kill[bufname] then
+				table.insert(buffers_to_kill, {
+					bufnr = bufnr,
+					name = bufname,
+					modified = vim.bo[bufnr].modified,
+				})
+			end
+		end
+	end
+
+	-- Handle each buffer
+	for _, buf in ipairs(buffers_to_kill) do
+		if buf.modified then
+			-- Prompt to save if modified
+			local ok, err = prompt_save_modified_buffer(buf.bufnr, buf.name)
+			if not ok then
+				return nil, err or "Operation cancelled"
+			end
+		end
+
+		-- Delete the buffer
+		pcall(vim.api.nvim_buf_delete, buf.bufnr, { force = true })
+	end
+
 	return true
 end
 

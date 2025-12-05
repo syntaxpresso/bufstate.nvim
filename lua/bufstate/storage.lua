@@ -81,6 +81,30 @@ function M.delete(name)
 	return true
 end
 
+-- Get all buffer file paths from a session file
+-- @param name string: Session name
+-- @return table|nil: Array of buffer paths, or nil if session doesn't exist
+function M.get_session_buffer_paths(name)
+	local path = M.get_session_path(name)
+	local file = io.open(path, "r")
+
+	if not file then
+		return nil
+	end
+
+	local buffers = {}
+	for line in file:lines() do
+		-- Extract buffers: badd +line path
+		local buf_path = line:match("^badd %+%d+ (.+)$")
+		if buf_path then
+			table.insert(buffers, buf_path)
+		end
+	end
+
+	file:close()
+	return buffers
+end
+
 -- Parse vim session file to extract metadata for preview
 function M.parse_session_metadata(name)
 	local path = M.get_session_path(name)
