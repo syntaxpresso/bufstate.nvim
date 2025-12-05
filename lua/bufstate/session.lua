@@ -20,62 +20,7 @@ function M.save(name)
 	-- Update timestamps for current tab and buffer
 	tabfilter.update_current_timestamps()
 
-	-- Step 1: Collect all tab working directories
-	local tab_cwds = {}
-	local tab_count = vim.fn.tabpagenr("$")
-	for tabnr = 1, tab_count do
-		local cwd = vim.fn.getcwd(-1, tabnr)
-		tab_cwds[cwd] = true
-	end
-
-	-- Step 2: Collect buffers that are visible in any window split
-	-- These must always be kept regardless of their path
-	local visible_buffers = {}
-	for tabnr = 1, tab_count do
-		local wins = vim.fn.tabpagewinnr(tabnr, "$")
-		for w = 1, wins do
-			local win_id = vim.fn.win_getid(w, tabnr)
-			local bufnr = vim.fn.winbufnr(win_id)
-			if bufnr > 0 then
-				visible_buffers[bufnr] = true
-			end
-		end
-	end
-
-	-- Step 3: Delete buffers that don't belong to any tab's working directory
-	for _, bufnr in ipairs(vim.api.nvim_list_bufs()) do
-		if vim.api.nvim_buf_is_valid(bufnr) then
-			local bufname = vim.api.nvim_buf_get_name(bufnr)
-			local buftype = vim.api.nvim_get_option_value("buftype", { buf = bufnr })
-
-			-- Only check real file buffers
-			if bufname ~= "" and buftype == "" then
-				local belongs_to_session = false
-
-				-- Always keep if visible in any window
-				if visible_buffers[bufnr] then
-					belongs_to_session = true
-				else
-					-- Check if buffer path starts with any tab's cwd
-					for cwd, _ in pairs(tab_cwds) do
-						if vim.startswith(bufname, cwd .. "/") or bufname == cwd then
-							belongs_to_session = true
-							break
-						end
-					end
-				end
-
-				-- Delete buffer if it doesn't belong to session
-				if not belongs_to_session then
-					pcall(function()
-						vim.cmd("silent! bdelete " .. bufnr)
-					end)
-				end
-			end
-		end
-	end
-
-	-- Step 4: Save using :mksession! (only session buffers remain)
+	-- Save using :mksession!
 	local ok, err = pcall(storage.save, name)
 
 	if not ok then
