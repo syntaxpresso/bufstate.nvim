@@ -41,17 +41,7 @@ end
 
 -- Load a workspace session
 function M.load(name)
-	if current_session ~= nil then
-		-- Save the current session, if any
-		local ok, err = pcall(session.save, current_session)
-		if not ok then
-			vim.notify("Warning: Failed to save current session: " .. err, vim.log.levels.WARN)
-		end
-		-- Get the buffers from the current session
-		local current_buffers = storage.get_session_buffer_paths(current_session)
-		-- Kill the buffers from the current session
-		session.kill_buffers_by_path(current_buffers)
-	end
+
 
 	if name then -- Load the new session if name is provided
 		local ok, err = session.load(name, current_session)

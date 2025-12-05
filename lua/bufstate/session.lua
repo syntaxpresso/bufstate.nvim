@@ -144,7 +144,13 @@ function M.load(name, current_session_name)
 	local storage = require("bufstate.storage")
 	local tabfilter = require("bufstate.tabfilter")
 
-	-- Step 1: Save current session if provided
+	-- Step 1: Handle modified buffers BEFORE saving
+	local ok_modified, err_modified = M.handle_modified_buffers()
+	if not ok_modified then
+		return nil, err_modified or "Session load cancelled"
+	end
+
+	-- Step 2: Save current session if provided
 	if current_session_name then
 		local ok, err = pcall(M.save, current_session_name)
 		if ok then
@@ -154,7 +160,7 @@ function M.load(name, current_session_name)
 		end
 	end
 
-	-- Step 2: Stop all LSP clients before deleting buffers (if enabled)
+	-- Step 3: Stop all LSP clients before deleting buffers (if enabled)
 	if config.stop_lsp_on_session_load then
 		local clients = vim.lsp.get_clients()
 		for _, client in ipairs(clients) do
@@ -162,19 +168,19 @@ function M.load(name, current_session_name)
 		end
 	end
 
-	-- Step 3: Wipe all buffers with force (modified buffers already handled)
+	-- Step 4: Wipe all buffers with force (modified buffers already handled)
 	local buffers = vim.api.nvim_list_bufs()
 	for _, buf in ipairs(buffers) do
 		pcall(vim.api.nvim_buf_delete, buf, { force = true })
 	end
 
-	-- Step 4: Load the vim session file
+	-- Step 5: Load the vim session file
 	local ok, err = storage.load(name)
 	if not ok then
 		return nil, err
 	end
 
-	-- Step 5: Rebuild tab filtering and update buflisted
+	-- Step 6: Rebuild tab filtering and update buflisted
 	vim.schedule(function()
 		tabfilter.rebuild_mapping()
 		local current_tab = vim.fn.tabpagenr()
