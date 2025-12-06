@@ -73,7 +73,7 @@ function M.load(name)
 	-- The session file sets winwidth=1, so we need to increase it first
 	vim.o.winwidth = 20
 	vim.o.winheight = 5
-	
+
 	-- Now safe to restore original window settings
 	vim.o.winminwidth = save_winminwidth
 	vim.o.winminheight = save_winminheight
