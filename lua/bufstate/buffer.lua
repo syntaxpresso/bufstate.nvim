@@ -36,7 +36,7 @@ function M.prompt_save_modified(bufnr, bufname)
 		local ok = pcall(vim.api.nvim_buf_call, bufnr, function()
 			-- Use noautocmd to prevent autocmds from triggering during save
 			-- which could potentially load additional buffers
-			vim.cmd("noautocmd write")
+			vim.cmd("write")
 		end)
 		if not ok then
 			return nil, "Failed to save buffer: " .. bufname
