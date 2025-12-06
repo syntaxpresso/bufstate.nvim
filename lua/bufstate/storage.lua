@@ -54,10 +54,24 @@ function M.load(name)
 	-- Set a flag to indicate we're loading a bufstate session
 	vim.g.bufstate_loading_session = true
 
+	-- Save current window settings to restore after session load
+	local save_winminwidth = vim.o.winminwidth
+	local save_winminheight = vim.o.winminheight
+
+	-- Temporarily set minimum window sizes to 0 to prevent E592 errors
+	-- The session file tries to set winwidth/winheight to 1 before restoring
+	-- the original winminwidth/winminheight, which causes constraint violations
+	vim.o.winminwidth = 0
+	vim.o.winminheight = 0
+
 	-- Source the vim session file
 	local ok, err = pcall(function()
 		vim.cmd("source " .. vim.fn.fnameescape(path))
 	end)
+
+	-- Restore original window settings
+	vim.o.winminwidth = save_winminwidth
+	vim.o.winminheight = save_winminheight
 
 	-- Clear the loading flag
 	vim.g.bufstate_loading_session = false
