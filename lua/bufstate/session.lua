@@ -55,6 +55,13 @@ function M.load(name, current_session, on_loaded)
 		end
 	end
 
+	-- Save the current session or _autosave
+	local session_to_save = current_session or "_autosave"
+	local save_ok, save_err = pcall(M.save, session_to_save)
+	if not save_ok then
+		vim.notify("Warning: Failed to save current session: " .. save_err, vim.log.levels.WARN)
+	end
+
 	-- If no session name provided, show picker first
 	if not name then
 		local sessions = storage.list()
@@ -73,13 +80,6 @@ function M.load(name, current_session, on_loaded)
 			M.load(selected.name, current_session, on_loaded)
 		end, { prompt = "Session to load: " })
 		return true
-	end
-
-	-- Save the current session or _autosave
-	local session_to_save = current_session or "_autosave"
-	local save_ok, save_err = pcall(M.save, session_to_save)
-	if not save_ok then
-		vim.notify("Warning: Failed to save current session: " .. save_err, vim.log.levels.WARN)
 	end
 
 	-- Delete all open buffers after saving the session

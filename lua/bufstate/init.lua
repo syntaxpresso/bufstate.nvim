@@ -200,7 +200,7 @@ function M.setup(opts)
 					local has_args = #vim.fn.argv() > 0
 
 					if not has_args then
-						local latest = storage.get_latest_session()
+						local latest = storage.get_last_loaded()
 						if latest then
 							local ok, err = session.load(latest, nil, function(loaded_name)
 								current_session = loaded_name
