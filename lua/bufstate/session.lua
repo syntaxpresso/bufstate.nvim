@@ -2,6 +2,8 @@ local ui = require("bufstate.ui")
 local storage = require("bufstate.storage")
 local tabfilter = require("bufstate.tabfilter")
 local buffer = require("bufstate.buffer")
+local lsp = require("bufstate.lsp")
+
 -- Session management module
 local M = {}
 
@@ -36,19 +38,24 @@ end
 -- @param current_session string|nil: Current session name for buffer cleanup
 -- @param on_loaded function|nil: Callback called with (session_name) when load completes
 function M.load(name, current_session, on_loaded)
-	local current_buffers = buffer.get_all_open()
+	-- Stop all language servers if user wants to
+	if config.stop_lsp_on_session_load then
+		lsp.stop_all_clients()
+	end
 
-	for _, buf in ipairs(current_buffers) do
+	-- Handle modified buffers
+	for _, buf in ipairs(buffer.get_all_open()) do
 		if buf.modified then
 			-- Prompt to save if modified
 			local ok, err = buffer.prompt_save_modified(buf.bufnr, buf.path)
 			if not ok then
+				-- TODO: restart clients
 				return false, err or "Operation cancelled"
 			end
 		end
 	end
 
-	-- If no name provided, show picker first
+	-- If no session name provided, show picker first
 	if not name then
 		local sessions = storage.list()
 		local filtered_sessions = {}
@@ -57,12 +64,10 @@ function M.load(name, current_session, on_loaded)
 				table.insert(filtered_sessions, s)
 			end
 		end
-
 		if #filtered_sessions == 0 then
 			vim.notify("No sessions available", vim.log.levels.WARN)
 			return false
 		end
-
 		ui.show_session_picker(filtered_sessions, function(selected)
 			-- Recursively call load with the selected name
 			M.load(selected.name, current_session, on_loaded)
@@ -70,21 +75,20 @@ function M.load(name, current_session, on_loaded)
 		return true
 	end
 
-	-- Only do buffer cleanup if we have a current session
-	if current_session then
-		-- Save the current session, if any
-		local ok, err = pcall(M.save, current_session)
-		if not ok then
-			vim.notify("Warning: Failed to save current session: " .. err, vim.log.levels.WARN)
-		end
+	-- Save the current session or _autosave
+	local session_to_save = current_session or "_autosave"
+	local save_ok, save_err = pcall(M.save, session_to_save)
+	if not save_ok then
+		vim.notify("Warning: Failed to save current session: " .. save_err, vim.log.levels.WARN)
 	end
 
+	-- Delete all open buffers after saving the session
 	buffer.delete_all()
 
 	-- Load the vim session file
-	local ok, err = storage.load(name)
-	if not ok then
-		return false, err or "Failed to load session"
+	local load_ok, load_err = storage.load(name)
+	if not load_ok then
+		return false, load_err or "Failed to load session"
 	end
 	storage.save_last_loaded(name)
 
