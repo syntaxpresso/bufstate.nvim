@@ -195,13 +195,9 @@ function M.setup(opts)
 
 	-- Auto-load latest session on startup
 	if opts.autoload_last_session then
-		vim.api.nvim_create_autocmd("VimEnter", {
-			once = true,
-			callback = function()
-				-- Schedule to ensure Neovim is fully initialized
-				vim.schedule(function()
-					-- Check if any buffers were opened with nvim (e.g., nvim file.txt)
-					local has_args = #vim.fn.argv() > 0
+		local function do_autoload()
+			-- Check if any buffers were opened with nvim (e.g., nvim file.txt)
+			local has_args = #vim.fn.argv() > 0
 
 			if not has_args then
 				local latest = storage.get_last_loaded()
@@ -216,9 +212,20 @@ function M.setup(opts)
 					end
 				end
 			end
-				end)
-			end,
-		})
+		end
+
+		-- If VimEnter has already fired (lazy.nvim loaded us late), run immediately
+		-- Otherwise, wait for VimEnter
+		if vim.v.vim_did_enter == 1 then
+			vim.schedule(do_autoload)
+		else
+			vim.api.nvim_create_autocmd("VimEnter", {
+				once = true,
+				callback = function()
+					vim.schedule(do_autoload)
+				end,
+			})
+		end
 	end
 end
 
