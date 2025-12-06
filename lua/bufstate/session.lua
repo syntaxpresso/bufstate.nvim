@@ -37,6 +37,7 @@ end
 -- @param name string|nil: Session name to load, or nil to show picker
 -- @param current_session string|nil: Current session name for buffer cleanup
 -- @param on_loaded function|nil: Callback called with (session_name) when load completes
+-- @return boolean|nil, string|nil: success status, session_name_or_error (session name on success, error on failure, nil when picker shown)
 function M.load(name, current_session, on_loaded)
 	current_session = current_session or "_autosave"
 	-- Stop all language servers if user wants to
@@ -79,7 +80,7 @@ function M.load(name, current_session, on_loaded)
 			-- Recursively call load with the selected name
 			M.load(selected.name, current_session, on_loaded)
 		end, { prompt = "Session to load: " })
-		return true
+		return true, nil -- Picker shown, actual session name unknown until selection
 	end
 
 	-- Delete all open buffers after saving the session
@@ -104,7 +105,7 @@ function M.load(name, current_session, on_loaded)
 		on_loaded(name)
 	end
 
-	return true
+	return true, name -- Return success and the loaded session name
 end
 
 return M

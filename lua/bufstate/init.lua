@@ -40,21 +40,25 @@ end
 
 -- Load a workspace session
 function M.load(name)
-	-- Callback to update current_session when load completes
-	local function on_loaded(loaded_name)
-		current_session = loaded_name
-		vim.notify("Session loaded: " .. loaded_name, vim.log.levels.INFO)
-	end
-
 	if name then
 		-- Direct load with session name
-		local ok, err = session.load(name, current_session, on_loaded)
+		local ok, result = session.load(name, current_session, nil)
 		if not ok then
-			vim.notify(err or "Failed to load session", vim.log.levels.ERROR)
+			vim.notify(result or "Failed to load session", vim.log.levels.ERROR)
 			return
+		end
+		-- Update current_session with the loaded session name
+		if result then
+			current_session = result
+			vim.notify("Session loaded: " .. result, vim.log.levels.INFO)
 		end
 	else
 		-- Show picker (session.load handles this when name is nil)
+		-- Use callback to update current_session when selection is made from picker
+		local function on_loaded(loaded_name)
+			current_session = loaded_name
+			vim.notify("Session loaded: " .. loaded_name, vim.log.levels.INFO)
+		end
 		session.load(nil, current_session, on_loaded)
 	end
 end
@@ -199,18 +203,19 @@ function M.setup(opts)
 					-- Check if any buffers were opened with nvim (e.g., nvim file.txt)
 					local has_args = #vim.fn.argv() > 0
 
-					if not has_args then
-						local latest = storage.get_last_loaded()
-						if latest then
-							local ok, err = session.load(latest, nil, function(loaded_name)
-								current_session = loaded_name
-								vim.notify("Session auto-loaded: " .. loaded_name, vim.log.levels.INFO)
-							end)
-							if not ok then
-								vim.notify("Failed to auto-load latest session: " .. err, vim.log.levels.WARN)
-							end
-						end
+			if not has_args then
+				local latest = storage.get_last_loaded()
+				if latest then
+					local ok, result = session.load(latest, nil, nil)
+					if not ok then
+						vim.notify("Failed to auto-load latest session: " .. result, vim.log.levels.WARN)
+					elseif result then
+						-- Direct load succeeded, update current_session immediately
+						current_session = result
+						vim.notify("Session auto-loaded: " .. result, vim.log.levels.INFO)
 					end
+				end
+			end
 				end)
 			end,
 		})
