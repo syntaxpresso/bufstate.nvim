@@ -38,12 +38,19 @@ end
 -- @param current_session string|nil: Current session name for buffer cleanup
 -- @param on_loaded function|nil: Callback called with (session_name) when load completes
 function M.load(name, current_session, on_loaded)
+	current_session = current_session or "_autosave"
 	-- Stop all language servers if user wants to
 	if config.stop_lsp_on_session_load then
 		lsp.stop_all_clients()
 	end
 
-	-- Handle modified buffers
+	-- Save current session
+	local save_ok, save_err = pcall(M.save, current_session)
+	if not save_ok then
+		vim.notify("Warning: Failed to save current session: " .. save_err, vim.log.levels.WARN)
+	end
+
+	-- Handle modified buffers (must happen after saving the session)
 	for _, buf in ipairs(buffer.get_all_open()) do
 		if buf.modified then
 			-- Prompt to save if modified
@@ -53,13 +60,6 @@ function M.load(name, current_session, on_loaded)
 				return false, err or "Operation cancelled"
 			end
 		end
-	end
-
-	-- Save the current session or _autosave
-	local session_to_save = current_session or "_autosave"
-	local save_ok, save_err = pcall(M.save, session_to_save)
-	if not save_ok then
-		vim.notify("Warning: Failed to save current session: " .. save_err, vim.log.levels.WARN)
 	end
 
 	-- If no session name provided, show picker first
