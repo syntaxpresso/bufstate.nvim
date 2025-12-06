@@ -54,10 +54,29 @@ function M.load(name)
 	-- Set a flag to indicate we're loading a bufstate session
 	vim.g.bufstate_loading_session = true
 
+	-- Save current window settings to restore after session load
+	local save_winminwidth = vim.o.winminwidth
+	local save_winminheight = vim.o.winminheight
+
+	-- Temporarily set minimum window sizes to 0 to prevent E592 errors
+	-- The session file tries to set winwidth/winheight to 1 before restoring
+	-- the original winminwidth/winminheight, which causes constraint violations
+	vim.o.winminwidth = 0
+	vim.o.winminheight = 0
+
 	-- Source the vim session file
 	local ok, err = pcall(function()
 		vim.cmd("source " .. vim.fn.fnameescape(path))
 	end)
+
+	-- After sourcing, ensure winwidth/winheight are large enough before restoring min values
+	-- The session file sets winwidth=1, so we need to increase it first
+	vim.o.winwidth = 20
+	vim.o.winheight = 5
+
+	-- Now safe to restore original window settings
+	vim.o.winminwidth = save_winminwidth
+	vim.o.winminheight = save_winminheight
 
 	-- Clear the loading flag
 	vim.g.bufstate_loading_session = false
@@ -146,16 +165,6 @@ function M.list()
 	end)
 
 	return sessions
-end
-
--- Get latest session by filesystem mtime
-function M.get_latest_session()
-	local sessions = M.list()
-	if #sessions > 0 then
-		-- list() already sorts by modified time, so first is most recent
-		return sessions[1].name
-	end
-	return nil
 end
 
 -- Get path to last loaded session tracker file

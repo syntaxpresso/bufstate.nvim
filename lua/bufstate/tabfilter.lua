@@ -1,5 +1,6 @@
 -- Tab filtering module for bufstate
 -- Maintains runtime state for buffer-to-tab mapping and handles autocmds
+local lsp = require("bufstate.lsp")
 local M = {}
 
 -- Runtime state (in memory only)
@@ -166,17 +167,28 @@ function M.rebuild_mapping()
 	end
 end
 
+
 -- Event handlers
 function M.on_tab_enter()
 	local tabnr = vim.fn.tabpagenr()
 	state.current_tab = tabnr
 	state.active_timestamps.tabs[tabnr] = os.time()
 	M.update_buflisted(tabnr)
+
+	-- Restart LSP for buffers in this tab (if enabled)
+	if state.stop_lsp_on_tab_leave then
+		lsp.restart_clients_for_tab(tabnr, state.buffer_tabs)
+	end
 end
 
 function M.on_tab_leave()
 	local tabnr = vim.fn.tabpagenr()
 	state.active_timestamps.tabs[tabnr] = os.time()
+
+	-- Stop LSP clients for buffers in this tab (if enabled)
+	if state.stop_lsp_on_tab_leave then
+		lsp.stop_clients_for_tab(tabnr, state.buffer_tabs)
+	end
 end
 
 function M.on_tab_closed()

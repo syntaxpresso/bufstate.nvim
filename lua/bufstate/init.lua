@@ -41,49 +41,25 @@ end
 -- Load a workspace session
 function M.load(name)
 	if name then
-		-- Name provided directly
-		local ok, err = session.load(name, current_session)
+		-- Direct load with session name
+		local ok, result = session.load(name, current_session, nil)
 		if not ok then
-			vim.notify(err or "Failed to load session", vim.log.levels.ERROR)
+			vim.notify(result or "Failed to load session", vim.log.levels.ERROR)
 			return
 		end
-
-		current_session = name
-		storage.save_last_loaded(name)
-		vim.notify("Session loaded: " .. name, vim.log.levels.INFO)
+		-- Update current_session with the loaded session name
+		if result then
+			current_session = result
+			vim.notify("Session loaded: " .. result, vim.log.levels.INFO)
+		end
 	else
-		-- Handle modified buffers BEFORE showing picker
-		local can_proceed, err = session.handle_modified_buffers()
-		if not can_proceed then
-			vim.notify(err or "Session load cancelled", vim.log.levels.WARN)
-			return
+		-- Show picker (session.load handles this when name is nil)
+		-- Use callback to update current_session when selection is made from picker
+		local function on_loaded(loaded_name)
+			current_session = loaded_name
+			vim.notify("Session loaded: " .. loaded_name, vim.log.levels.INFO)
 		end
-
-		-- Now show picker using snacks.picker (exclude current session)
-		local sessions = storage.list()
-		local filtered_sessions = {}
-		for _, s in ipairs(sessions) do
-			if s.name ~= current_session then
-				table.insert(filtered_sessions, s)
-			end
-		end
-
-		if #filtered_sessions == 0 then
-			vim.notify("No other sessions available", vim.log.levels.WARN)
-			return
-		end
-
-		ui.show_session_picker(filtered_sessions, function(selected)
-			local ok, load_err = session.load(selected.name, current_session)
-			if not ok then
-				vim.notify(load_err or "Failed to load session", vim.log.levels.ERROR)
-				return
-			end
-
-			current_session = selected.name
-			storage.save_last_loaded(selected.name)
-			vim.notify("Session loaded: " .. selected.name, vim.log.levels.INFO)
-		end, { prompt = "Session to load: " })
+		session.load(nil, current_session, on_loaded)
 	end
 end
 
@@ -205,35 +181,48 @@ function M.setup(opts)
 		tabfilter.setup({ enabled = true })
 	end
 
+	-- Setup session management with LSP config
+	session.setup({
+		stop_lsp_on_session_load = opts.stop_lsp_on_session_load,
+	})
+
 	-- Always setup autosave with user config (or defaults)
 	local autosave_mod = require("bufstate.autosave")
 	autosave_mod.setup(opts.autosave or {})
 
 	-- Auto-load latest session on startup
 	if opts.autoload_last_session then
-		vim.api.nvim_create_autocmd("VimEnter", {
-			once = true,
-			callback = function()
-				-- Schedule to ensure Neovim is fully initialized
-				vim.schedule(function()
-					-- Check if any buffers were opened with nvim (e.g., nvim file.txt)
-					local has_args = #vim.fn.argv() > 0
+		local function do_autoload()
+			-- Check if any buffers were opened with nvim (e.g., nvim file.txt)
+			local has_args = #vim.fn.argv() > 0
 
-					if not has_args then
-						local latest = storage.get_latest_session()
-						if latest then
-							local ok, err = session.load(latest)
-							if ok then
-								current_session = latest
-								vim.notify("Session auto-loaded: " .. latest, vim.log.levels.INFO)
-							else
-								vim.notify("Failed to auto-load latest session: " .. err, vim.log.levels.WARN)
-							end
-						end
+			if not has_args then
+				local latest = storage.get_last_loaded()
+				if latest then
+					local ok, result = session.load(latest, nil, nil)
+					if not ok then
+						vim.notify("Failed to auto-load latest session: " .. result, vim.log.levels.WARN)
+					elseif result then
+						-- Direct load succeeded, update current_session immediately
+						current_session = result
+						vim.notify("Session auto-loaded: " .. result, vim.log.levels.INFO)
 					end
-				end)
-			end,
-		})
+				end
+			end
+		end
+
+		-- If VimEnter has already fired (lazy.nvim loaded us late), run immediately
+		-- Otherwise, wait for VimEnter
+		if vim.v.vim_did_enter == 1 then
+			vim.schedule(do_autoload)
+		else
+			vim.api.nvim_create_autocmd("VimEnter", {
+				once = true,
+				callback = function()
+					vim.schedule(do_autoload)
+				end,
+			})
+		end
 	end
 end
 
