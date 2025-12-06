@@ -172,16 +172,6 @@ function M.list()
 	return sessions
 end
 
--- Get latest session by filesystem mtime
-function M.get_latest_session()
-	local sessions = M.list()
-	if #sessions > 0 then
-		-- list() already sorts by modified time, so first is most recent
-		return sessions[1].name
-	end
-	return nil
-end
-
 -- Get path to last loaded session tracker file
 function M.get_last_loaded_path()
 	return M.get_session_dir() .. "/.last_loaded"

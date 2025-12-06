@@ -77,19 +77,6 @@ function M.get_all_open()
 	return buffers
 end
 
--- Check and handle modified buffers before loading a session
--- Returns true if we can proceed, false if cancelled, or error message
-function M.handle_all_modified()
-	local modified = M.has_modified()
-	for _, buf in ipairs(modified) do
-		local ok, err = M.prompt_save_modified(buf.bufnr, buf.name)
-		if not ok then
-			return nil, err or "Session load cancelled"
-		end
-	end
-	return true
-end
-
 function M.delete_all()
 	vim.cmd("%bd")
 end
