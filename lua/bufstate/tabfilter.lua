@@ -172,7 +172,7 @@ end
 local function stop_lsp_for_tab(tabnr)
 	-- Track which clients are used by buffers in this tab
 	local clients_to_stop = {}
-	
+
 	for bufnr, tabs in pairs(state.buffer_tabs) do
 		if vim.tbl_contains(tabs, tabnr) and vim.api.nvim_buf_is_valid(bufnr) then
 			local clients = vim.lsp.get_clients({ bufnr = bufnr })
@@ -182,9 +182,9 @@ local function stop_lsp_for_tab(tabnr)
 			end
 		end
 	end
-	
+
 	-- Stop each unique client (this will kill the jdtls process)
-	for client_id, client in pairs(clients_to_stop) do
+	for client_id, _ in pairs(clients_to_stop) do
 		vim.schedule(function()
 			-- Stop the client completely (terminates the LSP server process)
 			vim.lsp.stop_client(client_id, true)
@@ -200,12 +200,12 @@ local function restart_lsp_for_tab(tabnr)
 			if vim.tbl_contains(tabs, tabnr) and vim.api.nvim_buf_is_valid(bufnr) then
 				local bufname = vim.api.nvim_buf_get_name(bufnr)
 				local buftype = vim.api.nvim_get_option_value("buftype", { buf = bufnr })
-				
+
 				-- Only restart LSP for real file buffers
 				if bufname ~= "" and buftype == "" then
 					-- Check if buffer has LSP clients attached
 					local clients = vim.lsp.get_clients({ bufnr = bufnr })
-					
+
 					-- If no clients are attached, trigger FileType autocmd to restart LSP
 					if #clients == 0 then
 						local filetype = vim.api.nvim_get_option_value("filetype", { buf = bufnr })
@@ -229,7 +229,7 @@ function M.on_tab_enter()
 	state.current_tab = tabnr
 	state.active_timestamps.tabs[tabnr] = os.time()
 	M.update_buflisted(tabnr)
-	
+
 	-- Restart LSP for buffers in this tab (if enabled)
 	if state.stop_lsp_on_tab_leave then
 		restart_lsp_for_tab(tabnr)
@@ -239,7 +239,7 @@ end
 function M.on_tab_leave()
 	local tabnr = vim.fn.tabpagenr()
 	state.active_timestamps.tabs[tabnr] = os.time()
-	
+
 	-- Stop LSP clients for buffers in this tab (if enabled)
 	if state.stop_lsp_on_tab_leave then
 		stop_lsp_for_tab(tabnr)

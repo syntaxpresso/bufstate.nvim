@@ -88,6 +88,27 @@ function M.handle_modified_buffers()
 	return true
 end
 
+-- Clean up a specific provisory buffer if other buffers exist
+-- @param bufnr number: The buffer number to delete
+function M.cleanup_provisory_buffer(bufnr)
+	if not bufnr or not vim.api.nvim_buf_is_valid(bufnr) then
+		return -- Buffer doesn't exist or was already deleted
+	end
+
+	-- Count valid buffers
+	local buffer_count = 0
+	for _, buf in ipairs(vim.api.nvim_list_bufs()) do
+		if vim.api.nvim_buf_is_valid(buf) then
+			buffer_count = buffer_count + 1
+		end
+	end
+
+	-- Only delete if at least 2 buffers exist
+	if buffer_count >= 2 then
+		pcall(vim.api.nvim_buf_delete, bufnr, { force = true })
+	end
+end
+
 -- Load workspace using :source
 function M.load(name, current_session_name)
 	local storage = require("bufstate.storage")
