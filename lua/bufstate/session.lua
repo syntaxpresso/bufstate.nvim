@@ -75,6 +75,28 @@ local function prompt_save_modified_buffer(bufnr, bufname)
 	return true
 end
 
+-- Get all currently open file buffers
+-- @return table: List of { bufnr, path, modified } for all valid file buffers
+local function get_open_buffers()
+	local buffers = {}
+	for _, bufnr in ipairs(vim.api.nvim_list_bufs()) do
+		if vim.api.nvim_buf_is_valid(bufnr) then
+			local bufname = vim.api.nvim_buf_get_name(bufnr)
+			local buftype = vim.api.nvim_get_option_value("buftype", { buf = bufnr })
+
+			-- Only include real file buffers
+			if bufname ~= "" and buftype == "" then
+				table.insert(buffers, {
+					bufnr = bufnr,
+					path = bufname,
+					modified = vim.bo[bufnr].modified,
+				})
+			end
+		end
+	end
+	return buffers
+end
+
 -- Check and handle modified buffers before loading a session
 -- Returns true if we can proceed, false if cancelled, or error message
 function M.handle_modified_buffers()
@@ -114,6 +136,18 @@ end
 -- @param current_session string|nil: Current session name for buffer cleanup
 -- @param on_loaded function|nil: Callback called with (session_name) when load completes
 function M.load(name, current_session, on_loaded)
+	local current_buffers = get_open_buffers()
+
+	for _, buf in ipairs(current_buffers) do
+		if buf.modified then
+			-- Prompt to save if modified
+			local ok, err = prompt_save_modified_buffer(buf.bufnr, buf.name)
+			if not ok then
+				return false, err or "Operation cancelled"
+			end
+		end
+	end
+
 	-- If no name provided, show picker first
 	if not name then
 		local sessions = storage.list()
@@ -126,7 +160,7 @@ function M.load(name, current_session, on_loaded)
 
 		if #filtered_sessions == 0 then
 			vim.notify("No sessions available", vim.log.levels.WARN)
-			return
+			return false
 		end
 
 		ui.show_session_picker(filtered_sessions, function(selected)
@@ -136,81 +170,21 @@ function M.load(name, current_session, on_loaded)
 		return true
 	end
 
-	-- At this point, we have a session name to load
-	local provisory_bufnr = nil
-
 	-- Only do buffer cleanup if we have a current session
 	if current_session then
-		-- Get the buffers from the current session
-		local current_buffers = storage.get_session_buffer_paths(current_session)
-		-- Create an empty buffer to prevent closing Neovim
-		vim.cmd("enew")
-		provisory_bufnr = vim.api.nvim_get_current_buf()
-
-		if current_buffers then
-			-- Build a set of paths for quick lookup
-			local paths_to_kill = {}
-			for _, path in ipairs(current_buffers) do
-				paths_to_kill[path] = true
-			end
-
-			-- Find buffers that match the paths
-			local buffers_to_kill = {}
-			for _, bufnr in ipairs(vim.api.nvim_list_bufs()) do
-				if vim.api.nvim_buf_is_valid(bufnr) then
-					local bufname = vim.api.nvim_buf_get_name(bufnr)
-					if bufname ~= "" and paths_to_kill[bufname] then
-						table.insert(buffers_to_kill, {
-							bufnr = bufnr,
-							name = bufname,
-							modified = vim.bo[bufnr].modified,
-						})
-					end
-				end
-			end
-
-			-- PHASE 1: Handle all modified buffers first (before deleting any)
-			for _, buf in ipairs(buffers_to_kill) do
-				if buf.modified then
-					-- Prompt to save if modified
-					local ok, err = prompt_save_modified_buffer(buf.bufnr, buf.name)
-					if not ok then
-						return nil, err or "Operation cancelled"
-					end
-				end
-			end
-			-- Save the current session, if any
-			local ok, err = pcall(M.save, current_session)
-			if not ok then
-				vim.notify("Warning: Failed to save current session: " .. err, vim.log.levels.WARN)
-			end
-
-			-- PHASE 2: Now delete all buffers (safe - all saves/discards handled)
-			for _, buf in ipairs(buffers_to_kill) do
-				pcall(vim.api.nvim_buf_delete, buf.bufnr, { force = true })
-			end
-		else
-			-- Save the current session, if any
-			local ok, err = pcall(M.save, current_session)
-			if not ok then
-				vim.notify("Warning: Failed to save current session: " .. err, vim.log.levels.WARN)
-			end
+		-- Save the current session, if any
+		local ok, err = pcall(M.save, current_session)
+		if not ok then
+			vim.notify("Warning: Failed to save current session: " .. err, vim.log.levels.WARN)
 		end
 	end
 
 	-- Load the vim session file
 	local ok, err = storage.load(name)
 	if not ok then
-		return nil, err or "Failed to load session"
+		return false, err or "Failed to load session"
 	end
 	storage.save_last_loaded(name)
-
-	-- Clean up provisory buffer after session loads
-	if provisory_bufnr then
-		vim.schedule(function()
-			M.cleanup_provisory_buffer(provisory_bufnr)
-		end)
-	end
 
 	-- Rebuild tab filtering and update buflisted
 	vim.schedule(function()
