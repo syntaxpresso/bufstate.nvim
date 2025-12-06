@@ -34,7 +34,9 @@ function M.prompt_save_modified(bufnr, bufname)
 
 	if choice == 1 then -- Save
 		local ok = pcall(vim.api.nvim_buf_call, bufnr, function()
-			vim.cmd("write")
+			-- Use noautocmd to prevent autocmds from triggering during save
+			-- which could potentially load additional buffers
+			vim.cmd("noautocmd write")
 		end)
 		if not ok then
 			return nil, "Failed to save buffer: " .. bufname
@@ -75,6 +77,17 @@ function M.get_all_open()
 		end
 	end
 	return buffers
+end
+
+-- Delete all unloaded buffers from the buffer list
+-- This is useful for cleaning up "ghost" buffers that remain in the buffer list
+-- but are no longer loaded in memory (e.g., after stopping LSP clients)
+function M.delete_unloaded()
+	for _, bufnr in ipairs(vim.api.nvim_list_bufs()) do
+		if vim.api.nvim_buf_is_valid(bufnr) and not vim.api.nvim_buf_is_loaded(bufnr) then
+			vim.api.nvim_buf_delete(bufnr, { force = true })
+		end
+	end
 end
 
 function M.delete_all()
