@@ -67,10 +67,18 @@ local function prompt_save_modified_buffer(bufnr, bufname)
 		if not ok then
 			return nil, "Failed to save buffer: " .. bufname
 		end
+		vim.notify("Saved: " .. display_name, vim.log.levels.INFO)
+	elseif choice == 2 then -- Discard
+		local ok = pcall(vim.api.nvim_buf_call, bufnr, function()
+			vim.cmd("e!")
+		end)
+		if not ok then
+			return nil, "Failed to discard changes for buffer: " .. bufname
+		end
+		vim.notify("Discarded changes to: " .. display_name, vim.log.levels.INFO)
 	elseif choice == 3 or choice == 0 then -- Cancel or ESC
 		return nil, "Operation cancelled"
 	end
-	-- choice == 2 (Discard) continues
 
 	return true
 end
