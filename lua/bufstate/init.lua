@@ -41,115 +41,22 @@ end
 
 -- Load a workspace session
 function M.load(name)
-	local provisory_bufnr = nil
-
-	if current_session ~= nil then
-		-- Get the buffers from the current session
-		local current_buffers = storage.get_session_buffer_paths(current_session)
-		-- Create an empty buffer to prevent closing Neovim
-		vim.cmd("enew")
-		provisory_bufnr = vim.api.nvim_get_current_buf()
-
-		if current_buffers then
-			-- Build a set of paths for quick lookup
-			local paths_to_kill = {}
-			for _, path in ipairs(current_buffers) do
-				paths_to_kill[path] = true
-			end
-
-			-- Find buffers that match the paths
-			local buffers_to_kill = {}
-			for _, bufnr in ipairs(vim.api.nvim_list_bufs()) do
-				if vim.api.nvim_buf_is_valid(bufnr) then
-					local bufname = vim.api.nvim_buf_get_name(bufnr)
-					if bufname ~= "" and paths_to_kill[bufname] then
-						table.insert(buffers_to_kill, {
-							bufnr = bufnr,
-							name = bufname,
-							modified = vim.bo[bufnr].modified,
-						})
-					end
-				end
-			end
-
-			-- PHASE 1: Handle all modified buffers first (before deleting any)
-			for _, buf in ipairs(buffers_to_kill) do
-				if buf.modified then
-					-- Prompt to save if modified
-					local ok, err = session.prompt_save_modified_buffer(buf.bufnr, buf.name)
-					if not ok then
-						return nil, err or "Operation cancelled"
-					end
-				end
-			end
-			-- Save the current session, if any
-			local ok, err = pcall(session.save, current_session)
-			if not ok then
-				vim.notify("Warning: Failed to save current session: " .. err, vim.log.levels.WARN)
-			end
-
-			-- PHASE 2: Now delete all buffers (safe - all saves/discards handled)
-			for _, buf in ipairs(buffers_to_kill) do
-				pcall(vim.api.nvim_buf_delete, buf.bufnr, { force = true })
-			end
-		else
-			-- Save the current session, if any
-			local ok, err = pcall(session.save, current_session)
-			if not ok then
-				vim.notify("Warning: Failed to save current session: " .. err, vim.log.levels.WARN)
-			end
-		end
+	-- Callback to update current_session when load completes
+	local function on_loaded(loaded_name)
+		current_session = loaded_name
+		vim.notify("Session loaded: " .. loaded_name, vim.log.levels.INFO)
 	end
 
-	if name then -- Load the new session if name is provided
-		local ok, err = session.load(name)
+	if name then
+		-- Direct load with session name
+		local ok, err = session.load(name, current_session, on_loaded)
 		if not ok then
 			vim.notify(err or "Failed to load session", vim.log.levels.ERROR)
 			return
 		end
-		current_session = name
-		storage.save_last_loaded(name)
-		vim.notify("Session loaded: " .. name, vim.log.levels.INFO)
-
-		-- Clean up provisory buffer after session loads
-		if provisory_bufnr then
-			vim.schedule(function()
-				session.cleanup_provisory_buffer(provisory_bufnr)
-			end)
-		end
-	else -- Open the picker if name of the new session wasn't provided
-		-- Now show picker using snacks.picker (exclude current session)
-		local sessions = storage.list()
-		local filtered_sessions = {}
-		for _, s in ipairs(sessions) do
-			if s.name ~= current_session then
-				table.insert(filtered_sessions, s)
-			end
-		end
-
-		if #filtered_sessions == 0 then
-			vim.notify("No other sessions available", vim.log.levels.WARN)
-			return
-		end
-
-		ui.show_session_picker(filtered_sessions, function(selected)
-			local ok, load_err = session.load(selected.name)
-			if not ok then
-				vim.notify(load_err or "Failed to load session", vim.log.levels.ERROR)
-				return
-			end
-
-			current_session = selected.name
-			storage.save_last_loaded(selected.name)
-			vim.notify("Session loaded: " .. selected.name, vim.log.levels.INFO)
-
-			-- Clean up provisory buffer after session loads
-			if provisory_bufnr then
-				vim.schedule(function()
-					session.cleanup_provisory_buffer(provisory_bufnr)
-				end)
-			end
-		end, { prompt = "Session to load: " })
+	else
+		-- Show picker (session.load handles this when name is nil)
+		session.load(nil, current_session, on_loaded)
 	end
 end
 
@@ -301,11 +208,11 @@ function M.setup(opts)
 					if not has_args then
 						local latest = storage.get_latest_session()
 						if latest then
-							local ok, err = session.load(latest)
-							if ok then
-								current_session = latest
-								vim.notify("Session auto-loaded: " .. latest, vim.log.levels.INFO)
-							else
+							local ok, err = session.load(latest, nil, function(loaded_name)
+								current_session = loaded_name
+								vim.notify("Session auto-loaded: " .. loaded_name, vim.log.levels.INFO)
+							end)
+							if not ok then
 								vim.notify("Failed to auto-load latest session: " .. err, vim.log.levels.WARN)
 							end
 						end
