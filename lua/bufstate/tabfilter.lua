@@ -1,6 +1,6 @@
 -- Tab filtering module for bufstate
 -- Maintains runtime state for buffer-to-tab mapping and handles autocmds
-local lsp_handler = require("bufstate.lsp_handler")
+local lsp = require("bufstate.lsp")
 local M = {}
 
 -- Runtime state (in memory only)
@@ -179,7 +179,7 @@ function M.on_tab_enter()
 
 	-- Restart LSP for buffers in this tab (if enabled)
 	if state.stop_lsp_on_tab_leave then
-		lsp_handler.restart_clients_for_tab(tabnr, state.buffer_tabs)
+		lsp.restart_clients_for_tab(tabnr, state.buffer_tabs)
 	end
 end
 
@@ -189,7 +189,7 @@ function M.on_tab_leave()
 
 	-- Stop LSP clients for buffers in this tab (if enabled)
 	if state.stop_lsp_on_tab_leave then
-		lsp_handler.stop_clients_for_tab(tabnr, state.buffer_tabs)
+		lsp.stop_clients_for_tab(tabnr, state.buffer_tabs)
 	end
 end
 

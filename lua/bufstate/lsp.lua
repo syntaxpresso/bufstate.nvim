@@ -1,4 +1,4 @@
--- LSP handler module for bufstate
+-- LSP module for bufstate
 -- Centralized LSP client management
 local M = {}
 
