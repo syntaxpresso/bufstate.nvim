@@ -12,6 +12,7 @@ local state = {
 		buffers = {}, -- { [bufnr] = timestamp }
 	},
 	enabled = true, -- Can be toggled via config
+	stop_lsp_on_tab_leave = true, -- Kill LSP servers when leaving tab (default: true)
 }
 
 -- Check if buffer belongs to tab (using existing session.lua logic)
@@ -50,6 +51,7 @@ end
 function M.setup(opts)
 	opts = opts or {}
 	state.enabled = opts.enabled ~= false -- default true
+	state.stop_lsp_on_tab_leave = opts.stop_lsp_on_tab_leave ~= false -- default true
 
 	if not state.enabled then
 		return

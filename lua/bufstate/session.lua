@@ -7,6 +7,17 @@ local lsp = require("bufstate.lsp")
 -- Session management module
 local M = {}
 
+-- Configuration
+local config = {
+	stop_lsp_on_session_load = true, -- Stop LSP servers when loading a session (default: true)
+}
+
+-- Setup function to accept configuration
+function M.setup(opts)
+	opts = opts or {}
+	config.stop_lsp_on_session_load = opts.stop_lsp_on_session_load ~= false -- default true
+end
+
 -- Save current workspace using :mksession!
 function M.save(name)
 	-- Update timestamps for current tab and buffer

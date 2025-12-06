@@ -368,6 +368,12 @@ vim.g.bufstate_no_default_maps = 1
 require("bufstate").setup({
   -- Tab-based buffer filtering
   filter_by_tab = true,           -- Default: true
+  
+  -- Stop LSP servers when leaving tabs (saves resources)
+  stop_lsp_on_tab_leave = true,   -- Default: true
+  
+  -- Stop LSP servers when loading a session (prevents LSP accumulation)
+  stop_lsp_on_session_load = true, -- Default: true
 
   -- Auto-load last session on startup
   autoload_last_session = true,   -- Default: false
