@@ -58,17 +58,12 @@ function M.load(name, current_session, on_loaded)
 	-- Handle modified buffers (must happen after saving the session)
 	-- Double-check that buffers are still loaded to prevent lazy-loading corruption
 	for _, buf in ipairs(buffer.get_all_open()) do
-		if not vim.api.nvim_buf_is_loaded(buf.bufnr) then
-			-- Buffer became unloaded between get_all_open() and now - force delete it
-			vim.api.nvim_buf_delete(buf.bufnr, { force = true })
-		else
-			if buf.modified then
-				-- Prompt to save if modified
-				local ok, err = buffer.prompt_save_modified(buf.bufnr, buf.path)
-				if not ok then
-					-- TODO: restart clients
-					return false, err or "Operation cancelled"
-				end
+		if buf.modified then
+			-- Prompt to save if modified
+			local ok, err = buffer.prompt_save_modified(buf.bufnr, buf.path)
+			if not ok then
+				-- TODO: restart clients
+				return false, err or "Operation cancelled"
 			end
 		end
 	end
