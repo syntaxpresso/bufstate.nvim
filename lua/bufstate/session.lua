@@ -56,7 +56,6 @@ function M.load(name, current_session, on_loaded)
 	end
 
 	-- Handle modified buffers (must happen after saving the session)
-	-- Double-check that buffers are still loaded to prevent lazy-loading corruption
 	for _, buf in ipairs(buffer.get_all_open()) do
 		if buf.modified then
 			-- Prompt to save if modified
