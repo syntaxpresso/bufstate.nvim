@@ -88,57 +88,6 @@ function M.handle_modified_buffers()
 	return true
 end
 
--- Kill buffers by their file paths
--- Prompts to save if buffer is modified
--- @param buffer_paths table: Array of buffer file paths to kill
--- @return boolean, string|nil: true if successful, or nil + error message if cancelled
-function M.kill_buffers_by_path(buffer_paths)
-	-- Create an empty buffer to prevent closing Neovim
-	vim.cmd("enew")
-	if not buffer_paths or #buffer_paths == 0 then
-		return true -- Nothing to do
-	end
-
-	-- Build a set of paths for quick lookup
-	local paths_to_kill = {}
-	for _, path in ipairs(buffer_paths) do
-		paths_to_kill[path] = true
-	end
-
-	-- Find buffers that match the paths
-	local buffers_to_kill = {}
-	for _, bufnr in ipairs(vim.api.nvim_list_bufs()) do
-		if vim.api.nvim_buf_is_valid(bufnr) then
-			local bufname = vim.api.nvim_buf_get_name(bufnr)
-			if bufname ~= "" and paths_to_kill[bufname] then
-				table.insert(buffers_to_kill, {
-					bufnr = bufnr,
-					name = bufname,
-					modified = vim.bo[bufnr].modified,
-				})
-			end
-		end
-	end
-
-	-- PHASE 1: Handle all modified buffers first (before deleting any)
-	for _, buf in ipairs(buffers_to_kill) do
-		if buf.modified then
-			-- Prompt to save if modified
-			local ok, err = prompt_save_modified_buffer(buf.bufnr, buf.name)
-			if not ok then
-				return nil, err or "Operation cancelled"
-			end
-		end
-	end
-
-	-- PHASE 2: Now delete all buffers (safe - all saves/discards handled)
-	for _, buf in ipairs(buffers_to_kill) do
-		pcall(vim.api.nvim_buf_delete, buf.bufnr, { force = true })
-	end
-
-	return true
-end
-
 -- Load workspace using :source
 function M.load(name, current_session_name)
 	local storage = require("bufstate.storage")

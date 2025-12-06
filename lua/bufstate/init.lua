@@ -41,7 +41,58 @@ end
 
 -- Load a workspace session
 function M.load(name)
+	if current_session ~= nil then
+		-- Get the buffers from the current session
+		local current_buffers = storage.get_session_buffer_paths(current_session)
+		-- Create an empty buffer to prevent closing Neovim
+		vim.cmd("enew")
+		if not current_buffers or #current_buffers == 0 then
+			return true -- Nothing to do
+		end
 
+		-- Build a set of paths for quick lookup
+		local paths_to_kill = {}
+		for _, path in ipairs(current_buffers) do
+			paths_to_kill[path] = true
+		end
+
+		-- Find buffers that match the paths
+		local buffers_to_kill = {}
+		for _, bufnr in ipairs(vim.api.nvim_list_bufs()) do
+			if vim.api.nvim_buf_is_valid(bufnr) then
+				local bufname = vim.api.nvim_buf_get_name(bufnr)
+				if bufname ~= "" and paths_to_kill[bufname] then
+					table.insert(buffers_to_kill, {
+						bufnr = bufnr,
+						name = bufname,
+						modified = vim.bo[bufnr].modified,
+					})
+				end
+			end
+		end
+
+		-- PHASE 1: Handle all modified buffers first (before deleting any)
+		for _, buf in ipairs(buffers_to_kill) do
+			if buf.modified then
+				-- Prompt to save if modified
+				local ok, err = session.prompt_save_modified_buffer(buf.bufnr, buf.name)
+				if not ok then
+					return nil, err or "Operation cancelled"
+				end
+			end
+		end
+
+		-- -- Save the current session, if any
+		local ok, err = pcall(session.save, current_session)
+		if not ok then
+			vim.notify("Warning: Failed to save current session: " .. err, vim.log.levels.WARN)
+		end
+
+		-- PHASE 2: Now delete all buffers (safe - all saves/discards handled)
+		for _, buf in ipairs(buffers_to_kill) do
+			pcall(vim.api.nvim_buf_delete, buf.bufnr, { force = true })
+		end
+	end
 
 	if name then -- Load the new session if name is provided
 		local ok, err = session.load(name, current_session)
