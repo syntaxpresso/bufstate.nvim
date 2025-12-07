@@ -67,10 +67,6 @@ function M.load(name, current_session)
 		lsp.stop_all_clients()
 	end
 
-	-- Clean up any unloaded buffers that LSP or other plugins might have left behind
-	-- This prevents ghost buffers from being included in the saved session
-	buffer.delete_unloaded()
-
 	-- Delete all open buffers after saving the session
 	buffer.delete_all()
 
