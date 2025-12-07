@@ -87,18 +87,24 @@ function M.clear_buffers(stop_lsp)
 		lsp.stop_all_clients()
 	end
 
-	-- Create a scratch buffer and switch to it
+	-- Create scratch buffer with plugin-safe settings
 	local scratch = vim.api.nvim_create_buf(false, true)
+	vim.bo[scratch].buftype = "nofile" -- Not a real file
+	vim.bo[scratch].swapfile = false -- No swap file
+	vim.bo[scratch].buflisted = false -- Don't list in buffer list
+	vim.bo[scratch].filetype = "" -- No filetype to prevent LSP attachment
+	-- NOTE: bufhidden left unset so session file can wipe it (prevents E517)
 
-	vim.api.nvim_set_current_buf(scratch)
+	-- Use noautocmd to prevent events when switching to scratch buffer
+	vim.cmd("noautocmd lua vim.api.nvim_set_current_buf(" .. scratch .. ")")
 
 	-- Get all other buffers
 	local bufs = vim.api.nvim_list_bufs()
 
-	-- Iterate and wipe
+	-- Wipe all other buffers (noautocmd prevents attachment attempts)
 	for _, buf in ipairs(bufs) do
 		if buf ~= scratch and vim.api.nvim_buf_is_valid(buf) then
-			vim.api.nvim_buf_delete(buf, { force = true })
+			pcall(vim.api.nvim_buf_delete, buf, { force = true })
 		end
 	end
 end

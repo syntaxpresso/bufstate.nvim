@@ -63,8 +63,8 @@ function M.restart_clients_for_buffers(bufnrs)
 				local bufname = vim.api.nvim_buf_get_name(bufnr)
 				local buftype = vim.api.nvim_get_option_value("buftype", { buf = bufnr })
 
-				-- Only restart LSP for real file buffers
-				if bufname ~= "" and buftype == "" then
+				-- Only restart LSP for real file buffers with valid paths
+				if bufname ~= "" and buftype == "" and vim.fn.filereadable(bufname) == 1 then
 					-- Check if buffer has LSP clients attached
 					local clients = vim.lsp.get_clients({ bufnr = bufnr })
 
@@ -72,8 +72,8 @@ function M.restart_clients_for_buffers(bufnrs)
 					if #clients == 0 then
 						local filetype = vim.api.nvim_get_option_value("filetype", { buf = bufnr })
 						if filetype ~= "" then
-							-- Trigger FileType event which will cause LSP to attach
-							vim.api.nvim_exec_autocmds("FileType", {
+							-- Wrap in pcall to prevent errors from breaking tab switching
+							pcall(vim.api.nvim_exec_autocmds, "FileType", {
 								buffer = bufnr,
 								data = { filetype = filetype },
 							})
