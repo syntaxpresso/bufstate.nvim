@@ -91,7 +91,7 @@ function M.delete_unloaded()
 end
 
 function M.delete_all()
-	vim.cmd("%bd")
+	vim.cmd("%bd!")
 end
 
 return M

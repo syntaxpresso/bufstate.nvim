@@ -25,7 +25,16 @@ local function buffer_belongs_to_tab(bufnr, tabnr)
 	local buftype = vim.api.nvim_get_option_value("buftype", { buf = bufnr })
 
 	-- Only track real files
-	if bufname == "" or buftype ~= "" or vim.fn.filereadable(bufname) ~= 1 then
+	-- For unloaded buffers (e.g. from session balt), skip filereadable check
+	-- since the file may not be loaded yet but still valid
+	if bufname == "" or buftype ~= "" then
+		return false
+	end
+
+	-- For loaded buffers, verify file exists
+	-- For unloaded buffers (e.g. alternate buffers from sessions), we trust
+	-- they are valid since they were added via badd/balt commands
+	if vim.api.nvim_buf_is_loaded(bufnr) and vim.fn.filereadable(bufname) ~= 1 then
 		return false
 	end
 
