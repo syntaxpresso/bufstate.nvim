@@ -1,3 +1,5 @@
+local lsp = require("bufstate.lsp")
+
 -- Buffer utility functions module
 local M = {}
 
@@ -79,27 +81,26 @@ function M.get_all_open()
 	return buffers
 end
 
--- Delete all unloaded buffers from the buffer list
--- This is useful for cleaning up "ghost" buffers that remain in the buffer list
--- but are no longer loaded in memory (e.g., after stopping LSP clients)
-function M.delete_unloaded()
-	for _, bufnr in ipairs(vim.api.nvim_list_bufs()) do
-		if vim.api.nvim_buf_is_valid(bufnr) and not vim.api.nvim_buf_is_loaded(bufnr) then
-			vim.api.nvim_buf_delete(bufnr, { force = true })
+function M.clear_buffers(stop_lsp)
+	-- Stop all language servers if user wants to
+	if stop_lsp then
+		lsp.stop_all_clients()
+	end
+
+	-- Create a scratch buffer and switch to it
+	local scratch = vim.api.nvim_create_buf(false, true)
+
+	vim.api.nvim_set_current_buf(scratch)
+
+	-- Get all other buffers
+	local bufs = vim.api.nvim_list_bufs()
+
+	-- Iterate and wipe
+	for _, buf in ipairs(bufs) do
+		if buf ~= scratch and vim.api.nvim_buf_is_valid(buf) then
+			vim.api.nvim_buf_delete(buf, { force = true })
 		end
 	end
-end
-
-function M.delete_all()
-	-- Clean up any unloaded buffers that LSP or other plugins might have left behind
-	-- This prevents ghost buffers from being included in the saved session
-	M.delete_unloaded()
-
-	-- Delete all open buffers
-	vim.cmd("silent! %bd!")
-
-	-- Delete all tabs
-	vim.cmd("silent! tabonly")
 end
 
 return M

@@ -116,9 +116,11 @@ function M.show_session_picker(sessions, callback, opts)
 		confirm = function(picker, item)
 			picker:close()
 			if item then
-				vim.schedule(function()
+				-- Use defer_fn to ensure picker cleanup/restoration is totally done
+				-- before we nuke the session. 20ms is enough for the event loop to flush.
+				vim.defer_fn(function()
 					callback(item.session)
-				end)
+				end, 20)
 			end
 		end,
 	})
