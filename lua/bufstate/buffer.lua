@@ -91,7 +91,15 @@ function M.delete_unloaded()
 end
 
 function M.delete_all()
-	vim.cmd("%bd!")
+	-- Clean up any unloaded buffers that LSP or other plugins might have left behind
+	-- This prevents ghost buffers from being included in the saved session
+	M.delete_unloaded()
+
+	-- Delete all buffers
+	vim.cmd("silent! %bd!")
+
+	-- Delete all tabs
+	vim.cmd("silent! tabonly!")
 end
 
 return M
