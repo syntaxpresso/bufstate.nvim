@@ -135,31 +135,25 @@ end
 
 -- Start a new session (save current, then clear workspace)
 function M.new(name)
+	-- Save current session before starting new one (only if a session is active)
+	if current_session then
+		session.save(current_session)
+		vim.notify("Current session saved: " .. current_session, vim.log.levels.INFO)
+	end
+
+	-- Clear all tabs and buffers
+	vim.cmd("silent! %bdelete")
+	vim.cmd("silent! tabonly")
+
 	if name then
-		-- Direct creation with name
-		local ok, result = session.new(name, current_session)
-		if not ok then
-			vim.notify(result or "Failed to create new session", vim.log.levels.ERROR)
-			return
-		end
-		-- Update current_session with the new session name
-		if result then
-			current_session = result
-			vim.notify("New session started: " .. result, vim.log.levels.INFO)
-		end
+		-- Set the new session name directly
+		current_session = name
+		vim.notify("New session started: " .. name, vim.log.levels.INFO)
 	else
 		-- Prompt for name using snacks.input
 		ui.prompt_session_name(function(session_name)
-			-- Call session.new with the entered name
-			local ok, result = session.new(session_name, current_session)
-			if not ok then
-				vim.notify(result or "Failed to create new session", vim.log.levels.ERROR)
-				return
-			end
-			if result then
-				current_session = result
-				vim.notify("New session started: " .. result, vim.log.levels.INFO)
-			end
+			current_session = session_name
+			vim.notify("New session started: " .. session_name, vim.log.levels.INFO)
 		end, { prompt = "New session name: " })
 	end
 end

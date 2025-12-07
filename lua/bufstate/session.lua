@@ -67,7 +67,11 @@ function M.load(name, current_session)
 		lsp.stop_all_clients()
 	end
 
-	-- Delete all open buffers and tabs after saving the session
+	-- Clean up any unloaded buffers that LSP or other plugins might have left behind
+	-- This prevents ghost buffers from being included in the saved session
+	buffer.delete_unloaded()
+
+	-- Delete all open buffers after saving the session
 	buffer.delete_all()
 
 	-- Load the vim session file
@@ -84,42 +88,6 @@ function M.load(name, current_session)
 	end)
 
 	return true, name -- Return success and the loaded session name
-end
-
--- Start a new session (save current, then clear workspace)
--- @param name string: New session name (required)
--- @param current_session string|nil: Current session name to save before clearing
--- @return boolean, string|nil: success status, session_name_or_error
-function M.new(name, current_session)
-	-- Session name is required - prompt logic is in init.lua
-	if not name then
-		return false, "Session name is required"
-	end
-
-	current_session = current_session or "_autosave"
-
-	-- Handle modified buffers
-	for _, buf in ipairs(buffer.get_all_open()) do
-		if buf.modified then
-			-- Prompt to save if modified
-			local ok, err = buffer.prompt_save_modified(buf.bufnr, buf.path)
-			if not ok then
-				-- TODO: restart clients
-				return false, err or "Operation cancelled"
-			end
-		end
-	end
-
-	-- Save current session before starting new one
-	local save_ok, save_err = pcall(M.save, current_session)
-	if not save_ok then
-		vim.notify("Warning: Failed to save current session: " .. save_err, vim.log.levels.WARN)
-	end
-
-	-- Delete all open buffers and tabs after saving the session
-	buffer.delete_all()
-
-	return true, name
 end
 
 return M
