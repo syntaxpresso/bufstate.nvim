@@ -42,7 +42,7 @@ end
 function M.load(name)
 	if name then
 		-- Direct load with session name
-		local ok, result = session.load(name, current_session, nil)
+		local ok, result = session.load(name, current_session)
 		if not ok then
 			vim.notify(result or "Failed to load session", vim.log.levels.ERROR)
 			return
@@ -53,13 +53,30 @@ function M.load(name)
 			vim.notify("Session loaded: " .. result, vim.log.levels.INFO)
 		end
 	else
-		-- Show picker (session.load handles this when name is nil)
-		-- Use callback to update current_session when selection is made from picker
-		local function on_loaded(loaded_name)
-			current_session = loaded_name
-			vim.notify("Session loaded: " .. loaded_name, vim.log.levels.INFO)
+		-- Show picker first, then call session.load with selected name
+		local sessions = storage.list()
+		local filtered_sessions = {}
+		for _, s in ipairs(sessions) do
+			if s.name ~= current_session then
+				table.insert(filtered_sessions, s)
+			end
 		end
-		session.load(nil, current_session, on_loaded)
+		if #filtered_sessions == 0 then
+			vim.notify("No sessions available", vim.log.levels.WARN)
+			return
+		end
+		ui.show_session_picker(filtered_sessions, function(selected)
+			-- Call session.load with the selected name
+			local ok, result = session.load(selected.name, current_session)
+			if not ok then
+				vim.notify(result or "Failed to load session", vim.log.levels.ERROR)
+				return
+			end
+			if result then
+				current_session = result
+				vim.notify("Session loaded: " .. result, vim.log.levels.INFO)
+			end
+		end, { prompt = "Session to load: " })
 	end
 end
 
@@ -202,7 +219,7 @@ function M.setup(opts)
 			if not has_args then
 				local latest = storage.get_last_loaded()
 				if latest then
-					local ok, result = session.load(latest, nil, nil)
+					local ok, result = session.load(latest, nil)
 					if not ok then
 						vim.notify("Failed to auto-load latest session: " .. result, vim.log.levels.WARN)
 					elseif result then

@@ -1,3 +1,5 @@
+local buffer = require("bufstate.buffer")
+
 -- Storage module for handling vim session files
 local M = {}
 
@@ -45,11 +47,6 @@ function M.load(name)
 	if vim.fn.filereadable(path) == 0 then
 		return nil, "Session not found: " .. name
 	end
-
-	-- Explicitly clean up before loading session
-	-- This ensures no buffers from current Neovim instance leak into the session
-	vim.cmd("silent! %bdelete!")
-	vim.cmd("silent! tabonly")
 
 	-- Set a flag to indicate we're loading a bufstate session
 	vim.g.bufstate_loading_session = true

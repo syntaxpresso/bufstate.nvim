@@ -1,4 +1,3 @@
-local ui = require("bufstate.ui")
 local storage = require("bufstate.storage")
 local tabfilter = require("bufstate.tabfilter")
 local buffer = require("bufstate.buffer")
@@ -34,12 +33,17 @@ function M.save(name)
 end
 
 -- Load workspace using :source
--- @param name string|nil: Session name to load, or nil to show picker
+-- @param name string: Session name to load (required)
 -- @param current_session string|nil: Current session name for buffer cleanup
--- @param on_loaded function|nil: Callback called with (session_name) when load completes
--- @return boolean|nil, string|nil: success status, session_name_or_error (session name on success, error on failure, nil when picker shown)
-function M.load(name, current_session, on_loaded)
+-- @return boolean, string|nil: success status, session_name_or_error (session name on success, error on failure)
+function M.load(name, current_session)
+	-- Session name is required - picker logic is in init.lua
+	if not name then
+		return false, "Session name is required"
+	end
+
 	current_session = current_session or "_autosave"
+
 	-- Stop all language servers if user wants to
 	if config.stop_lsp_on_session_load then
 		lsp.stop_all_clients()
@@ -67,26 +71,6 @@ function M.load(name, current_session, on_loaded)
 		end
 	end
 
-	-- If no session name provided, show picker first
-	if not name then
-		local sessions = storage.list()
-		local filtered_sessions = {}
-		for _, s in ipairs(sessions) do
-			if s.name ~= current_session then
-				table.insert(filtered_sessions, s)
-			end
-		end
-		if #filtered_sessions == 0 then
-			vim.notify("No sessions available", vim.log.levels.WARN)
-			return false
-		end
-		ui.show_session_picker(filtered_sessions, function(selected)
-			-- Recursively call load with the selected name
-			M.load(selected.name, current_session, on_loaded)
-		end, { prompt = "Session to load: " })
-		return true, nil -- Picker shown, actual session name unknown until selection
-	end
-
 	-- Delete all open buffers after saving the session
 	buffer.delete_all()
 
@@ -103,11 +87,6 @@ function M.load(name, current_session, on_loaded)
 		local current_tab = vim.fn.tabpagenr()
 		tabfilter.update_buflisted(current_tab)
 	end)
-
-	-- Notify caller of successful load
-	if on_loaded then
-		on_loaded(name)
-	end
 
 	return true, name -- Return success and the loaded session name
 end
