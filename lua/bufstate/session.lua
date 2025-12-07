@@ -44,22 +44,7 @@ function M.load(name, current_session)
 
 	current_session = current_session or "_autosave"
 
-	-- Stop all language servers if user wants to
-	if config.stop_lsp_on_session_load then
-		lsp.stop_all_clients()
-	end
-
-	-- Clean up any unloaded buffers that LSP or other plugins might have left behind
-	-- This prevents ghost buffers from being included in the saved session
-	buffer.delete_unloaded()
-
-	-- Save current session
-	local save_ok, save_err = pcall(M.save, current_session)
-	if not save_ok then
-		vim.notify("Warning: Failed to save current session: " .. save_err, vim.log.levels.WARN)
-	end
-
-	-- Handle modified buffers (must happen after saving the session)
+	-- Handle modified buffers
 	for _, buf in ipairs(buffer.get_all_open()) do
 		if buf.modified then
 			-- Prompt to save if modified
@@ -71,6 +56,21 @@ function M.load(name, current_session)
 		end
 	end
 
+	-- Save current session
+	local save_ok, save_err = pcall(M.save, current_session)
+	if not save_ok then
+		vim.notify("Warning: Failed to save current session: " .. save_err, vim.log.levels.WARN)
+	end
+
+	-- Stop all language servers if user wants to
+	if config.stop_lsp_on_session_load then
+		lsp.stop_all_clients()
+	end
+
+	-- Clean up any unloaded buffers that LSP or other plugins might have left behind
+	-- This prevents ghost buffers from being included in the saved session
+	buffer.delete_unloaded()
+
 	-- Delete all open buffers after saving the session
 	buffer.delete_all()
 
@@ -79,7 +79,6 @@ function M.load(name, current_session)
 	if not load_ok then
 		return false, load_err or "Failed to load session"
 	end
-	storage.save_last_loaded(name)
 
 	-- Rebuild tab filtering and update buflisted
 	vim.schedule(function()
