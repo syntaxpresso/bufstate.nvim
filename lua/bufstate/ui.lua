@@ -114,10 +114,12 @@ function M.show_session_picker(sessions, callback, opts)
 		end,
 		preview = preview_session,
 		confirm = function(picker, item)
-			if item then
-				callback(item.session)
-			end
 			picker:close()
+			if item then
+				vim.schedule(function()
+					callback(item.session)
+				end)
+			end
 		end,
 	})
 end
