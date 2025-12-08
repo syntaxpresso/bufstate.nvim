@@ -76,6 +76,9 @@ function M.load(name, current_session)
 		tabfilter.update_buflisted(current_tab)
 	end)
 
+	-- Save the last loaded session to reopen upon nvim enter
+	storage.save_last_loaded(name)
+
 	return true, name -- Return success and the loaded session name
 end
 
