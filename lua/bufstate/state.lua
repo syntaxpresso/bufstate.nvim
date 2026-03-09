@@ -17,18 +17,18 @@ M.db = {}
 ---@param tab integer  tab page handle (from vim.api.nvim_get_current_tabpage)
 ---@param buf integer  buffer id
 function M.add(tab, buf)
-  if not M.db[tab] then
-    M.db[tab] = {}
-  end
-  M.db[tab][buf] = true
+	if not M.db[tab] then
+		M.db[tab] = {}
+	end
+	M.db[tab][buf] = true
 end
 
 --- Remove buf from every tab that owns it.
 ---@param buf integer
 function M.remove(buf)
-  for _, bufs in pairs(M.db) do
-    bufs[buf] = nil
-  end
+	for _, bufs in pairs(M.db) do
+		bufs[buf] = nil
+	end
 end
 
 --- Returns true if tab owns buf.
@@ -36,33 +36,35 @@ end
 ---@param buf integer
 ---@return boolean
 function M.has(tab, buf)
-  return M.db[tab] ~= nil and M.db[tab][buf] == true
+	return M.db[tab] ~= nil and M.db[tab][buf] == true
 end
 
 --- Returns a list of all buf ids owned by tab (valid or not).
 ---@param tab integer
 ---@return integer[]
 function M.get(tab)
-  local result = {}
-  local bufs = M.db[tab]
-  if not bufs then return result end
-  for buf in pairs(bufs) do
-    result[#result + 1] = buf
-  end
-  return result
+	local result = {}
+	local bufs = M.db[tab]
+	if not bufs then
+		return result
+	end
+	for buf in pairs(bufs) do
+		result[#result + 1] = buf
+	end
+	return result
 end
 
 --- Remove a dead tab entry from db.
 ---@param tab integer
 function M.purge_tab(tab)
-  M.db[tab] = nil
+	M.db[tab] = nil
 end
 
 --- Wipe db entirely (used before rebuilding from session load).
 function M.reset()
-  for k in pairs(M.db) do
-    M.db[k] = nil
-  end
+	for k in pairs(M.db) do
+		M.db[k] = nil
+	end
 end
 
 return M
