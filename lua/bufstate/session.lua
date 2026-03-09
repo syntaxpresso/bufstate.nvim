@@ -1,121 +1,121 @@
-local storage = require("bufstate.storage")
-local tabfilter = require("bufstate.tabfilter")
-local buffer = require("bufstate.buffer")
+-- lua/bufstate/session.lua
+-- High-level session operations: save, load, delete, list, new.
+-- Uses storage.lua for I/O; has no dependency on bufstate.nvim's state or filter
+-- logic (those run automatically via autocmds when buffers are opened).
+--
+-- save_fn is injected by init.lua during setup() via set_save_fn(). It wraps
+-- storage.save() with a relist-all-bufs step so that :mksession records buffers
+-- from every tab (not just the currently-listed ones). Falls back to a plain
+-- storage.save() if called before setup (e.g. in tests).
 
--- Session management module
+local storage = require("bufstate.storage")
+
 local M = {}
 
--- Configuration
-local config = {
-	stop_lsp_on_session_load = true, -- Stop LSP servers when loading a session (default: true)
-}
+-- Current session name (nil = unsaved / no session active)
+M.current = nil
 
--- Setup function to accept configuration
-function M.setup(opts)
-	opts = opts or {}
-	config.stop_lsp_on_session_load = opts.stop_lsp_on_session_load ~= false -- default true
+-- Injected by init.lua; wraps storage.save() with the buflisted relist sandwich
+local save_fn = nil
+
+--- Set the save implementation. Called once by init.lua during M.setup().
+--- fn(name) must raise on failure and update session.current.
+---@param fn fun(name: string)
+function M.set_save_fn(fn)
+  save_fn = fn
 end
 
--- Save current workspace using :mksession!
+-- ── helpers ───────────────────────────────────────────────────────────────────
+
+--- Wipe all normal (non-terminal, non-scratch) buffers, listed or not.
+--- Called before sourcing a new session so that badd/edit in the session
+--- file always create fresh buffers and fire BufAdd/BufReadPost correctly.
+local function clear_buffers()
+  for _, buf in ipairs(vim.api.nvim_list_bufs()) do
+    if vim.api.nvim_buf_is_valid(buf)
+      and vim.bo[buf].buftype == ""
+    then
+      pcall(vim.cmd, "bwipeout! " .. buf)
+    end
+  end
+end
+
+-- ── public API ────────────────────────────────────────────────────────────────
+
+--- Save the current workspace to `name`.
+--- Routes through save_fn (injected by init.lua) so that all known buffers are
+--- temporarily relisted before :mksession runs. Falls back to storage.save()
+--- if save_fn hasn't been set yet (e.g. standalone tests).
+---@param name string
 function M.save(name)
-	-- Update timestamps for current tab and buffer
-	tabfilter.update_current_timestamps()
-
-	-- Save using :mksession!
-	local ok, err = pcall(storage.save, name)
-
-	if not ok then
-		error(err)
-	end
-
-	return true
+  assert(type(name) == "string" and name ~= "", "session name required")
+  if save_fn then
+    save_fn(name) -- raises on failure; also sets session.current and restores filter
+  else
+    storage.save(name) -- raises on failure
+    M.current = name
+  end
+  return true
 end
 
--- Load workspace using :source
--- @param name string: Session name to load (required)
--- @param current_session string|nil: Current session name for buffer cleanup
--- @return boolean, string|nil: success status, session_name_or_error (session name on success, error on failure)
-function M.load(name, current_session)
-	-- Session name is required - picker logic is in init.lua
-	if not name then
-		return false, "Session name is required"
-	end
+--- Load a named session, saving the current one first.
+---@param name string
+---@return boolean ok, string|nil err
+function M.load(name)
+  assert(type(name) == "string" and name ~= "", "session name required")
 
-	current_session = current_session or "_autosave"
+  -- Persist current work before blowing it away
+  if M.current then
+    pcall(M.save, M.current)
+  else
+    pcall(M.save, "_autosave")
+  end
 
-	-- Handle modified buffers
-	for _, buf in ipairs(buffer.get_all_open()) do
-		if buf.modified then
-			-- Prompt to save if modified
-			local ok, err = buffer.prompt_save_modified(buf.bufnr, buf.path)
-			if not ok then
-				-- TODO: restart clients
-				return false, err or "Operation cancelled"
-			end
-		end
-	end
+  clear_buffers()
 
-	-- Save current session
-	local save_ok, save_err = pcall(M.save, current_session)
-	if not save_ok then
-		vim.notify("Warning: Failed to save current session: " .. save_err, vim.log.levels.WARN)
-	end
+  local ok, err = storage.load(name)
+  if not ok then
+    return false, err
+  end
 
-	buffer.clear_buffers(config.stop_lsp_on_session_load)
-
-	-- Load the vim session file
-	local load_ok, load_err = storage.load(name)
-	if not load_ok then
-		return false, load_err or "Failed to load session"
-	end
-
-	-- Rebuild tab filtering and update buflisted
-	vim.schedule(function()
-		tabfilter.rebuild_mapping()
-		local current_tab = vim.fn.tabpagenr()
-		tabfilter.update_buflisted(current_tab)
-	end)
-
-	-- Save the last loaded session to reopen upon nvim enter
-	storage.save_last_loaded(name)
-
-	return true, name -- Return success and the loaded session name
+  M.current = name
+  storage.save_last_loaded(name)
+  return true
 end
 
--- Start a new session (save current, then clear workspace)
--- @param name string: New session name (required)
--- @param current_session string|nil: Current session name to save before clearing
--- @return boolean, string|nil: success status, session_name_or_error
-function M.new(name, current_session)
-	-- Session name is required - prompt logic is in init.lua
-	if not name then
-		return false, "Session name is required"
-	end
+--- Delete a named session file.
+---@param name string
+---@return boolean ok, string|nil err
+function M.delete(name)
+  assert(type(name) == "string" and name ~= "", "session name required")
+  local ok, err = storage.delete(name)
+  if ok and M.current == name then
+    M.current = nil
+  end
+  return ok, err
+end
 
-	current_session = current_session or "_autosave"
+--- Start a new empty session (saves current first, then clears workspace).
+---@param name string
+---@return boolean ok, string|nil err
+function M.new(name)
+  assert(type(name) == "string" and name ~= "", "session name required")
 
-	-- Handle modified buffers
-	for _, buf in ipairs(buffer.get_all_open()) do
-		if buf.modified then
-			-- Prompt to save if modified
-			local ok, err = buffer.prompt_save_modified(buf.bufnr, buf.path)
-			if not ok then
-				-- TODO: restart clients
-				return false, err or "Operation cancelled"
-			end
-		end
-	end
+  if M.current then
+    pcall(M.save, M.current)
+  else
+    pcall(M.save, "_autosave")
+  end
 
-	-- Save current session before starting new one
-	local save_ok, save_err = pcall(M.save, current_session)
-	if not save_ok then
-		vim.notify("Warning: Failed to save current session: " .. save_err, vim.log.levels.WARN)
-	end
+  clear_buffers()
+  M.current = name
+  return true
+end
 
-	-- Delete all open buffers and tabs after saving the session
-	buffer.clear_buffers(config.stop_lsp_on_session_load)
-
-	return true, name
+--- List all saved sessions.
+---@return { name: string, path: string, mtime: integer }[]
+function M.list()
+  return storage.list()
 end
 
 return M

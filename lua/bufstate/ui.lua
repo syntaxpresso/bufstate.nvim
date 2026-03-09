@@ -1,129 +1,129 @@
--- UI module for snacks integration
+-- lua/bufstate/ui.lua
+-- Snacks.nvim UI: input prompt + session picker with preview.
+
 local M = {}
 
--- Prompt for session name using snacks.input
+-- ── input prompt ──────────────────────────────────────────────────────────────
+
+--- Prompt for a session name using snacks.input.
+--- Falls back to vim.ui.input if snacks is unavailable.
+---@param callback fun(name: string)
+---@param opts? { prompt?: string, default?: string }
 function M.prompt_session_name(callback, opts)
-	opts = opts or {}
+  opts = opts or {}
+  local ok, snacks = pcall(require, "snacks")
+  if not ok then
+    vim.ui.input({ prompt = opts.prompt or "Session name: ", default = opts.default or "" }, function(value)
+      if value and value ~= "" then callback(value) end
+    end)
+    return
+  end
 
-	local ok, snacks = pcall(require, "snacks")
-	if not ok then
-		vim.notify("snacks.nvim is required for workspace-selector", vim.log.levels.ERROR)
-		return
-	end
-
-	snacks.input({
-		prompt = opts.prompt or "Session name: ",
-		default = opts.default or "",
-	}, function(value)
-		if value and value ~= "" then
-			callback(value)
-		end
-	end)
+  snacks.input({
+    prompt  = opts.prompt  or "Session name: ",
+    default = opts.default or "",
+  }, function(value)
+    if value and value ~= "" then
+      callback(value)
+    end
+  end)
 end
 
--- Custom preview function to show session details
+-- ── session picker ────────────────────────────────────────────────────────────
+
+--- Preview callback for snacks.picker: renders session metadata as markdown.
 local function preview_session(ctx)
-	local storage = require("bufstate.storage")
+  local storage = require("bufstate.storage")
 
-	-- Reset preview
-	ctx.preview:reset()
-	ctx.preview:minimal()
+  ctx.preview:reset()
+  ctx.preview:minimal()
 
-	-- Parse the vim session file for metadata
-	local metadata = storage.parse_session_metadata(ctx.item.session.name)
-	if not metadata then
-		ctx.preview:notify("Failed to parse session file", "error")
-		return
-	end
+  local meta = storage.parse_session_metadata(ctx.item.session.name)
+  if not meta then
+    ctx.preview:notify("Failed to read session file", "error")
+    return
+  end
 
-	-- Build preview content
-	local lines = {}
-	table.insert(lines, "# Session: " .. ctx.item.session.name)
-	table.insert(lines, "")
-	table.insert(lines, "**Modified:** " .. os.date("%Y-%m-%d %H:%M:%S", ctx.item.session.modified))
-	table.insert(lines, "**Tabs:** " .. metadata.tab_count)
-	table.insert(lines, "**Buffers:** " .. #metadata.buffers)
+  local lines = {}
+  lines[#lines + 1] = "# Session: " .. ctx.item.session.name
+  lines[#lines + 1] = ""
+  lines[#lines + 1] = "**Modified:** " .. os.date("%Y-%m-%d %H:%M:%S", ctx.item.session.mtime)
+  lines[#lines + 1] = "**Tabs:** "    .. meta.tab_count
+  lines[#lines + 1] = "**Buffers:** " .. #meta.buffers
+  lines[#lines + 1] = ""
+  lines[#lines + 1] = "## Workspaces"
+  lines[#lines + 1] = ""
 
-	-- Show working directories
-	if #metadata.cwd_list > 0 then
-		table.insert(lines, "")
-		table.insert(lines, "## Working Directories")
-		table.insert(lines, "")
-		for i, cwd in ipairs(metadata.cwd_list) do
-			table.insert(lines, string.format("%d. `%s`", i, cwd))
-		end
-	end
+  for i, cwd in ipairs(meta.cwd_list) do
+    lines[#lines + 1] = string.format("%d. `%s`", i, cwd)
+  end
 
-	-- Show buffer list (limited to first 20 to avoid huge previews)
-	if #metadata.buffers > 0 then
-		table.insert(lines, "")
-		table.insert(lines, "## Buffers")
-		table.insert(lines, "")
-		local max_show = math.min(20, #metadata.buffers)
-		for i = 1, max_show do
-			local buf_path = metadata.buffers[i]
-			local filename = vim.fn.fnamemodify(buf_path, ":t")
-			table.insert(lines, string.format("- %s", filename))
-		end
-		if #metadata.buffers > 20 then
-			table.insert(lines, string.format("- ... and %d more", #metadata.buffers - 20))
-		end
-	end
+  if #meta.cwd_list == 0 and #meta.buffers > 0 then
+    -- No tcd lines — single cwd session; just list buffer filenames
+    for _, buf_path in ipairs(meta.buffers) do
+      local fname = vim.fn.fnamemodify(buf_path, ":t")
+      lines[#lines + 1] = "   - " .. fname
+    end
+  end
 
-	-- Set the preview content
-	ctx.preview:set_lines(lines)
-	ctx.preview:highlight({ ft = "markdown" })
+  ctx.preview:set_lines(lines)
+  ctx.preview:highlight({ ft = "markdown" })
 end
 
--- Show session picker using snacks.picker
+--- Show a session picker using snacks.picker.
+--- Falls back to vim.ui.select if snacks is unavailable.
+--- Sessions must be the list returned by storage.list(): { name, path, mtime }.
+---@param sessions { name: string, path: string, mtime: integer }[]
+---@param callback fun(session: { name: string, path: string, mtime: integer })
+---@param opts? { prompt?: string }
 function M.show_session_picker(sessions, callback, opts)
-	opts = opts or {}
+  opts = opts or {}
 
-	local ok, snacks = pcall(require, "snacks")
-	if not ok then
-		vim.notify("snacks.nvim is required for bufstate", vim.log.levels.ERROR)
-		return
-	end
+  if #sessions == 0 then
+    vim.notify("No sessions found", vim.log.levels.WARN)
+    return
+  end
 
-	if #sessions == 0 then
-		vim.notify("No sessions found", vim.log.levels.WARN)
-		return
-	end
+  local ok, snacks = pcall(require, "snacks")
+  if not ok then
+    local names = vim.tbl_map(function(s) return s.name end, sessions)
+    vim.ui.select(names, { prompt = opts.prompt or "Select session: " }, function(choice)
+      if not choice then return end
+      for _, s in ipairs(sessions) do
+        if s.name == choice then
+          callback(s)
+          return
+        end
+      end
+    end)
+    return
+  end
 
-	-- Format sessions for picker
-	local items = {}
-	for _, session in ipairs(sessions) do
-		local modified = os.date("%Y-%m-%d %H:%M", session.modified)
-		table.insert(items, {
-			text = session.name, -- Only searchable name, not the date
-			session = session,
-			modified = modified, -- Store modified date separately
-		})
-	end
+  local items = {}
+  for _, s in ipairs(sessions) do
+    items[#items + 1] = {
+      text    = s.name,
+      session = s,
+    }
+  end
 
-	snacks.picker.pick({
-		items = items,
-		prompt = opts.prompt or "Select Session",
-		format = function(item, _)
-			-- Format display without numbers (numbers interfere with filtering)
-			return {
-				{ string.format("%-30s", item.text) },
-				{ " " },
-				{ item.modified, "Comment" },
-			}
-		end,
-		preview = preview_session,
-		confirm = function(picker, item)
-			picker:close()
-			if item then
-				-- Use defer_fn to ensure picker cleanup/restoration is totally done
-				-- before we nuke the session. 20ms is enough for the event loop to flush.
-				vim.defer_fn(function()
-					callback(item.session)
-				end, 20)
-			end
-		end,
-	})
+  snacks.picker.pick({
+    items   = items,
+    prompt  = opts.prompt or "Select Session",
+    format  = function(item, _)
+      local modified = os.date("%Y-%m-%d %H:%M", item.session.mtime)
+      return {
+        { string.format("%-30s", item.text) },
+        { " " },
+        { modified, "Comment" },
+      }
+    end,
+    preview = preview_session,
+    confirm = function(picker, item)
+      if item then callback(item.session) end
+      picker:close()
+    end,
+  })
 end
 
 return M

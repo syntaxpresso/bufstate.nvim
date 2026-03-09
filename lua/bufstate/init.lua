@@ -1,255 +1,560 @@
--- Main bufstate module
-local storage = require("bufstate.storage")
-local session = require("bufstate.session")
-local ui = require("bufstate.ui")
-local tabfilter = require("bufstate.tabfilter")
+-- lua/bufstate/init.lua
 
 local M = {}
+local state   = require("bufstate.state")
+local session = require("bufstate.session")
+local storage = require("bufstate.storage")
+local ui      = require("bufstate.ui")
 
--- State tracking
-local current_session = nil
+-- Guard: true while we are toggling buflisted ourselves.
+-- Prevents our own buflisted changes from triggering state.remove via BufDelete.
+local filtering = false
 
--- Save the current workspace session (overwrites current session)
-function M.save()
-	if current_session then
-		-- Save to current session
-		session.save(current_session)
-		vim.notify("Session saved: " .. current_session, vim.log.levels.INFO)
-	else
-		-- No current session, prompt for name (behaves like save_as)
-		M.save_as()
-	end
+-- Guard: true while a session file is being :source'd.
+-- Suppresses BufAdd during the global `badd` preamble emitted by :mksession,
+-- which fires before any tab context is restored. State is rebuilt from the
+-- authoritative window layout after :source completes via post_load_rebuild().
+local loading = false
+
+-- ── helpers ───────────────────────────────────────────────────────────────────
+
+--- Set buflisted for all known buffers based on ownership of `tab`.
+--- Buffers owned by `tab` → listed. All others → unlisted.
+---@param tab integer
+local function filter_for_tab(tab)
+  filtering = true
+  for _, buf in ipairs(vim.api.nvim_list_bufs()) do
+    if vim.api.nvim_buf_is_valid(buf) then
+      vim.bo[buf].buflisted = state.has(tab, buf)
+    end
+  end
+  filtering = false
 end
 
--- Save the current workspace session with a new name
-function M.save_as(name)
-	if name then
-		-- Name provided directly
-		session.save(name)
-		current_session = name
-		vim.notify("Session saved as: " .. name, vim.log.levels.INFO)
-	else
-		-- Prompt for name using snacks.input
-		ui.prompt_session_name(function(session_name)
-			session.save(session_name)
-			current_session = session_name
-			vim.notify("Session saved as: " .. session_name, vim.log.levels.INFO)
-		end, { prompt = "Save session as: " })
-	end
+--- Unlist every known buffer (called on TabLeave).
+local function unlist_all()
+  filtering = true
+  for _, buf in ipairs(vim.api.nvim_list_bufs()) do
+    if vim.api.nvim_buf_is_valid(buf) then
+      vim.bo[buf].buflisted = false
+    end
+  end
+  filtering = false
 end
 
--- Load a workspace session
-function M.load(name)
-	if name then
-		-- Direct load with session name
-		local ok, result = session.load(name, current_session)
-		if not ok then
-			vim.notify(result or "Failed to load session", vim.log.levels.ERROR)
-			return
-		end
-		-- Update current_session with the loaded session name
-		if result then
-			current_session = result
-			vim.notify("Session loaded: " .. result, vim.log.levels.INFO)
-		end
-	else
-		-- Show picker first, then call session.load with selected name
-		local sessions = storage.list()
-		local filtered_sessions = {}
-		for _, s in ipairs(sessions) do
-			if s.name ~= current_session then
-				table.insert(filtered_sessions, s)
-			end
-		end
-		if #filtered_sessions == 0 then
-			vim.notify("No sessions available", vim.log.levels.WARN)
-			return
-		end
-		ui.show_session_picker(filtered_sessions, function(selected)
-			-- Call session.load with the selected name
-			local ok, result = session.load(selected.name, current_session)
-			if not ok then
-				vim.notify(result or "Failed to load session", vim.log.levels.ERROR)
-				return
-			end
-			if result then
-				current_session = result
-				vim.notify("Session loaded: " .. result, vim.log.levels.INFO)
-			end
-		end, { prompt = "Session to load: " })
-	end
+--- Rebuild state.db from the live tab/window layout after a session load.
+--- This is the authoritative post-load source of tab→buffer assignment:
+---   • Window buffers  — nvim_win_get_buf (the buffer visible in the window)
+---   • Alternate bufs  — bufnr('#') inside each window (records balt entries
+---                       that :mksession writes for background buffers)
+--- All tabs a buffer appears in are recorded (a buffer in two tabs → owned by both).
+---@param restart_lsp boolean
+local function post_load_rebuild(restart_lsp)
+  state.reset()
+  local tabs = vim.api.nvim_list_tabpages()
+  for _, tab in ipairs(tabs) do
+    local wins = vim.api.nvim_tabpage_list_wins(tab)
+    for _, win in ipairs(wins) do
+      -- Primary buffer displayed in this window
+      local buf = vim.api.nvim_win_get_buf(win)
+      if vim.api.nvim_buf_is_valid(buf) and vim.bo[buf].buftype == "" then
+        state.add(tab, buf)
+      end
+      -- Alternate buffer for this window (set by `balt` in the session file —
+      -- this is how :mksession records background/non-windowed buffers per tab)
+      local alt = vim.api.nvim_win_call(win, function() return vim.fn.bufnr('#') end)
+      if alt and alt > 0
+        and vim.api.nvim_buf_is_valid(alt)
+        and vim.bo[alt].buftype == ""
+      then
+        state.add(tab, alt)
+      end
+    end
+  end
+  local current_tab = vim.api.nvim_get_current_tabpage()
+  filter_for_tab(current_tab)
+
+  if restart_lsp then
+    require("bufstate.lsp").restart_clients_for_tab(current_tab)
+  end
 end
 
--- Delete a session
-function M.delete(name)
-	if name then
-		-- Name provided directly
-		local ok, err = storage.delete(name)
-		if not ok then
-			vim.notify(err or "Failed to delete session", vim.log.levels.ERROR)
-			return
-		end
-		-- If we deleted the current session, reset to nil
-		if current_session == name then
-			current_session = nil
-		end
-		vim.notify("Session deleted: " .. name, vim.log.levels.INFO)
-	else
-		-- Show picker using snacks.picker
-		local sessions = storage.list()
-		ui.show_session_picker(sessions, function(selected)
-			local ok, err = storage.delete(selected.name)
-			if not ok then
-				vim.notify(err or "Failed to delete session", vim.log.levels.ERROR)
-				return
-			end
-			-- If we deleted the current session, reset to nil
-			if current_session == selected.name then
-				current_session = nil
-			end
-			vim.notify("Session deleted: " .. selected.name, vim.log.levels.INFO)
-		end, { prompt = "Session to delete: " })
-	end
+--- Temporarily relist every buffer known to state.db (across all tabs) so that
+--- :mksession records them in its `badd` preamble. Without this, buffers on
+--- non-current tabs are unlisted (our filter hid them) and are silently dropped
+--- from the session file.
+--- Always paired with a filter_for_tab() call immediately after :mksession.
+local function relist_all_for_save()
+  filtering = true
+  for _, bufs in pairs(state.db) do
+    for buf in pairs(bufs) do
+      if vim.api.nvim_buf_is_valid(buf) then
+        vim.bo[buf].buflisted = true
+      end
+    end
+  end
+  filtering = false
 end
 
--- List all available sessions
-function M.list()
-	local sessions = storage.list()
-
-	if #sessions == 0 then
-		vim.notify("No sessions found", vim.log.levels.WARN)
-		return
-	end
-
-	print("Available sessions:")
-	for _, s in ipairs(sessions) do
-		local modified = os.date("%Y-%m-%d %H:%M", s.modified)
-		print(string.format("  %s (modified: %s)", s.name, modified))
-	end
+--- Save wrapper used by all save paths in init.lua.
+--- Relists all known buffers before :mksession so nothing is dropped, then
+--- restores the buflisted filter for the current tab.
+--- Raises on failure (same contract as storage.save).
+---@param name string
+local function do_save(name)
+  relist_all_for_save()
+  storage.save(name) -- raises on failure
+  filter_for_tab(vim.api.nvim_get_current_tabpage())
+  session.current = name
 end
 
--- Get current session name
-function M.get_current_session()
-	return current_session
+-- ── safe buffer delete / wipeout ─────────────────────────────────────────────
+
+--- Core: switch away from `buf`, then run `cmd` to remove it.
+--- If buf is not the current buffer, runs `cmd` immediately.
+---@param buf integer
+---@param cmd string  "bdelete" or "bwipeout"
+local function safe_remove(buf, cmd)
+  if vim.api.nvim_get_current_buf() == buf then
+    vim.cmd("bprevious")
+    -- bprevious is a no-op when there is nothing else to switch to
+    if vim.api.nvim_get_current_buf() == buf then
+      vim.cmd("enew")
+    end
+  end
+  pcall(vim.cmd, cmd .. " " .. buf)
 end
 
--- Start a new session (save current, then clear workspace)
-function M.new(name)
-	if name then
-		-- Direct creation with name
-		local ok, result = session.new(name, current_session)
-		if not ok then
-			vim.notify(result or "Failed to create new session", vim.log.levels.ERROR)
-			return
-		end
-		-- Update current_session with the new session name
-		if result then
-			current_session = result
-			vim.notify("New session started: " .. result, vim.log.levels.INFO)
-		end
-	else
-		-- Prompt for name using snacks.input
-		ui.prompt_session_name(function(session_name)
-			-- Call session.new with the entered name
-			local ok, result = session.new(session_name, current_session)
-			if not ok then
-				vim.notify(result or "Failed to create new session", vim.log.levels.ERROR)
-				return
-			end
-			if result then
-				current_session = result
-				vim.notify("New session started: " .. result, vim.log.levels.INFO)
-			end
-		end, { prompt = "New session name: " })
-	end
+-- ── public API ────────────────────────────────────────────────────────────────
+
+--- Returns true if buf belongs to the current tab.
+--- Wire this into bufferline's custom_filter option:
+---   custom_filter = require("bufstate").buf_filter
+---@param buf integer
+---@return boolean
+function M.buf_filter(buf)
+  local tab = vim.api.nvim_get_current_tabpage()
+  return state.has(tab, buf)
 end
 
--- Autosave functions
-function M.autosave()
-	local autosave_mod = require("bufstate.autosave")
-	autosave_mod.perform_autosave()
+--- Safe bdelete — keeps the tab alive.
+--- Wire into bufferline: close_command = function(buf) require("bufstate").bdelete(buf) end
+---@param buf? integer  defaults to current buffer
+function M.bdelete(buf)
+  safe_remove(buf or vim.api.nvim_get_current_buf(), "bdelete")
 end
 
-function M.autosave_pause()
-	local autosave_mod = require("bufstate.autosave")
-	autosave_mod.pause()
+--- Safe bwipeout — keeps the tab alive.
+---@param buf? integer  defaults to current buffer
+function M.bwipeout(buf)
+  safe_remove(buf or vim.api.nvim_get_current_buf(), "bwipeout")
 end
 
-function M.autosave_resume()
-	local autosave_mod = require("bufstate.autosave")
-	autosave_mod.resume()
+-- ── watch window ──────────────────────────────────────────────────────────────
+
+local watch_buf   = nil
+local watch_win   = nil
+local watch_timer = nil
+
+--- Build a human-readable snapshot of state.db for display.
+---@return string
+local function db_snapshot()
+  local tabs = vim.api.nvim_list_tabpages()
+  local current_tab = vim.api.nvim_get_current_tabpage()
+
+  local lines = { "bufstate.nvim state:" }
+  for _, tab in ipairs(tabs) do
+    local marker = tab == current_tab and " *" or ""
+    local bufs = state.get(tab)
+    local names = {}
+    for _, buf in ipairs(bufs) do
+      local name = vim.api.nvim_buf_get_name(buf)
+      name = name ~= "" and vim.fn.fnamemodify(name, ":~:.") or ("[buf " .. buf .. "]")
+      names[#names + 1] = name
+    end
+    lines[#lines + 1] = string.format(
+      "  tab %d%s: [%s]",
+      tab,
+      marker,
+      table.concat(names, ", ")
+    )
+  end
+
+  -- Orphaned (dead) tab entries still in db
+  local live = {}
+  for _, t in ipairs(tabs) do live[t] = true end
+  for tab in pairs(state.db) do
+    if not live[tab] then
+      lines[#lines + 1] = string.format(
+        "  tab %d (dead): %d buf(s)",
+        tab,
+        vim.tbl_count(state.db[tab])
+      )
+    end
+  end
+
+  return table.concat(lines, "\n")
 end
 
-function M.autosave_status()
-	local autosave_mod = require("bufstate.autosave")
-	local status = autosave_mod.get_status()
-
-	print("Autosave Status:")
-	print(string.format("  Enabled: %s", status.enabled and "Yes" or "No"))
-	print(string.format("  Paused: %s", status.paused and "Yes" or "No"))
-	print(string.format("  Current Session: %s", status.session))
-	print(string.format("  Last Save: %s", status.last_save))
-	print(string.format("  Interval: %.1f minutes", status.interval_minutes))
+local function watch_refresh()
+  if not watch_buf or not vim.api.nvim_buf_is_valid(watch_buf) then return end
+  local lines = vim.split(db_snapshot(), "\n", { plain = true })
+  vim.api.nvim_buf_set_option(watch_buf, "modifiable", true)
+  vim.api.nvim_buf_set_lines(watch_buf, 0, -1, false, lines)
+  vim.api.nvim_buf_set_option(watch_buf, "modifiable", false)
 end
 
--- Setup function for plugin configuration
-function M.setup(opts)
-	opts = opts or {}
+local function watch_open()
+  if watch_win and vim.api.nvim_win_is_valid(watch_win) then
+    vim.api.nvim_set_current_win(watch_win)
+    return
+  end
 
-	-- Mark that setup has been called
-	vim.g.bufstate_setup_called = true
+  watch_buf = vim.api.nvim_create_buf(false, true) -- unlisted, scratch
+  vim.api.nvim_buf_set_option(watch_buf, "bufhidden", "wipe")
+  vim.api.nvim_buf_set_option(watch_buf, "filetype", "bufstate-watch")
 
-	-- Setup tab filtering (enabled by default)
-	if opts.filter_by_tab ~= false then
-		tabfilter.setup({
-			enabled = true,
-			stop_lsp_on_tab_leave = opts.stop_lsp_on_tab_leave,
-		})
-	end
+  local width = 60
+  local height = 15
+  local nvim_ui = vim.api.nvim_list_uis()[1]
+  watch_win = vim.api.nvim_open_win(watch_buf, false, {
+    relative  = "editor",
+    width     = width,
+    height    = height,
+    row       = 1,
+    col       = (nvim_ui and nvim_ui.width or 120) - width - 2,
+    style     = "minimal",
+    border    = "rounded",
+    title     = " bufstate state ",
+    title_pos = "center",
+    zindex    = 50,
+  })
 
-	-- Setup session management with LSP config
-	session.setup({
-		stop_lsp_on_session_load = opts.stop_lsp_on_session_load,
-	})
+  watch_refresh()
 
-	-- Always setup autosave with user config (or defaults)
-	local autosave_mod = require("bufstate.autosave")
-	autosave_mod.setup(opts.autosave or {})
+  watch_timer = (vim.uv or vim.loop).new_timer()
+  watch_timer:start(500, 500, vim.schedule_wrap(function()
+    if not watch_win or not vim.api.nvim_win_is_valid(watch_win) then
+      watch_timer:stop()
+      watch_timer = nil
+      watch_buf   = nil
+      watch_win   = nil
+      return
+    end
+    watch_refresh()
+  end))
+end
 
-	-- Auto-load latest session on startup
-	if opts.autoload_last_session then
-		local function do_autoload()
-			-- Check if any buffers were opened with nvim (e.g., nvim file.txt)
-			local has_args = #vim.fn.argv() > 0
+local function watch_close()
+  if watch_timer then
+    watch_timer:stop()
+    watch_timer = nil
+  end
+  if watch_win and vim.api.nvim_win_is_valid(watch_win) then
+    vim.api.nvim_win_close(watch_win, true)
+  end
+  watch_win = nil
+  watch_buf = nil
+end
 
-			if not has_args then
-				local latest = storage.get_last_loaded()
-				if latest then
-					local ok, result = session.load(latest, nil)
-					if not ok then
-						vim.notify("Failed to auto-load latest session: " .. result, vim.log.levels.WARN)
-					elseif result then
-						-- Direct load succeeded, update current_session immediately
-						current_session = result
-						vim.notify("Session auto-loaded: " .. result, vim.log.levels.INFO)
-					end
-				end
-			end
-		end
+-- ── setup ─────────────────────────────────────────────────────────────────────
 
-		-- If VimEnter has already fired (lazy.nvim loaded us late), run immediately
-		-- Otherwise, wait for VimEnter
-		if vim.v.vim_did_enter == 1 then
-			vim.schedule(do_autoload)
-		else
-			vim.api.nvim_create_autocmd("VimEnter", {
-				once = true,
-				callback = function()
-					vim.schedule(do_autoload)
-				end,
-			})
-		end
-	end
+function M.setup(_opts)
+  _opts = _opts or {}
+  local augroup = vim.api.nvim_create_augroup("BufstateNvim", { clear = true })
+
+  -- LSP config
+  local stop_lsp_on_session_load = _opts.stop_lsp_on_session_load ~= false -- default true
+
+  -- Wire session.lua's save calls through our relist-aware wrapper so that
+  -- :mksession always sees all buffers across all tabs (not just the current
+  -- tab's listed ones).
+  session.set_save_fn(do_save)
+
+  -- ── autocmds ────────────────────────────────────────────────────────────────
+
+  -- State write: buffer explicitly opened by the user
+  vim.api.nvim_create_autocmd({ "BufReadPost", "BufNewFile" }, {
+    group = augroup,
+    callback = function(ev)
+      local tab = vim.api.nvim_get_current_tabpage()
+      state.add(tab, ev.buf)
+      filter_for_tab(tab)
+    end,
+  })
+
+  -- State write: buffer added via :badd (BufReadPost never fires for :badd)
+  vim.api.nvim_create_autocmd("BufAdd", {
+    group = augroup,
+    callback = function(ev)
+      if filtering then return end
+      -- Suppress during session :source — the global `badd` preamble fires
+      -- before tabs are restored, so tab context is wrong. post_load_rebuild()
+      -- will assign buffers to the correct tabs after :source completes.
+      if loading  then return end
+      if vim.bo[ev.buf].buftype ~= "" then return end
+      local tab = vim.api.nvim_get_current_tabpage()
+      state.add(tab, ev.buf)
+    end,
+  })
+
+  -- State write: buffer deleted by the user
+  vim.api.nvim_create_autocmd("BufDelete", {
+    group = augroup,
+    callback = function(ev)
+      if filtering then return end
+      state.remove(ev.buf)
+    end,
+  })
+
+  -- On TabLeave: unlist everything so no bleed between tabs; stop LSP
+  vim.api.nvim_create_autocmd("TabLeave", {
+    group = augroup,
+    callback = function()
+      unlist_all()
+    end,
+  })
+
+  -- On TabEnter: list only the buffers that belong to this tab; restart LSP
+  vim.api.nvim_create_autocmd("TabEnter", {
+    group = augroup,
+    callback = function()
+      local tab = vim.api.nvim_get_current_tabpage()
+      filter_for_tab(tab)
+      require("bufstate.lsp").restart_clients_for_tab(tab)
+    end,
+  })
+
+  -- Cleanup: purge dead tab handles from db
+  vim.api.nvim_create_autocmd("TabClosed", {
+    group = augroup,
+    callback = function()
+      local live = {}
+      for _, t in ipairs(vim.api.nvim_list_tabpages()) do live[t] = true end
+      for tab in pairs(state.db) do
+        if not live[tab] then state.purge_tab(tab) end
+      end
+    end,
+  })
+
+  -- ── debug / watch commands ───────────────────────────────────────────────────
+
+  vim.api.nvim_create_user_command("BufstateDebug", function()
+    vim.notify(db_snapshot(), vim.log.levels.INFO, { title = "bufstate.nvim" })
+  end, { desc = "Print bufstate.nvim state" })
+
+  vim.api.nvim_create_user_command("BufstateWatch", function()
+    if watch_win and vim.api.nvim_win_is_valid(watch_win) then
+      watch_close()
+    else
+      watch_open()
+    end
+  end, { desc = "Toggle bufstate.nvim live state watch window" })
+
+  -- ── safe delete commands ─────────────────────────────────────────────────────
+
+  vim.api.nvim_create_user_command("Bdelete", function() M.bdelete() end, {
+    desc = "Delete buffer without closing the tab",
+  })
+  vim.api.nvim_create_user_command("Bwipeout", function() M.bwipeout() end, {
+    desc = "Wipeout buffer without closing the tab",
+  })
+
+  vim.cmd([[
+    cnoreabbrev <expr> bd getcmdtype() == ":" && getcmdline() == "bd" ? "Bdelete"  : "bd"
+    cnoreabbrev <expr> bw getcmdtype() == ":" && getcmdline() == "bw" ? "Bwipeout" : "bw"
+  ]])
+
+  -- ── session commands ────────────────────────────────────────────────────────
+
+  -- :BufstateSave [name] — save current session (prompts if no name and no current)
+  vim.api.nvim_create_user_command("BufstateSave", function(cmd_opts)
+    local name = cmd_opts.args ~= "" and cmd_opts.args or session.current
+    if name then
+      local ok, err = pcall(do_save, name)
+      if not ok then
+        vim.notify(err, vim.log.levels.ERROR)
+      else
+        vim.notify("Session saved: " .. name, vim.log.levels.INFO)
+      end
+    else
+      ui.prompt_session_name(function(input)
+        local ok, err = pcall(do_save, input)
+        if not ok then
+          vim.notify(err, vim.log.levels.ERROR)
+        else
+          vim.notify("Session saved as: " .. input, vim.log.levels.INFO)
+        end
+      end, { prompt = "Save session as: " })
+    end
+  end, { nargs = "?", desc = "Save current session" })
+
+  -- :BufstateSaveAs [name] — always prompts / accepts explicit name
+  vim.api.nvim_create_user_command("BufstateSaveAs", function(cmd_opts)
+    local function run_save(name)
+      local ok, err = pcall(do_save, name)
+      if not ok then
+        vim.notify(err, vim.log.levels.ERROR)
+      else
+        vim.notify("Session saved as: " .. name, vim.log.levels.INFO)
+      end
+    end
+    if cmd_opts.args ~= "" then
+      run_save(cmd_opts.args)
+    else
+      ui.prompt_session_name(run_save, { prompt = "Save session as: " })
+    end
+  end, { nargs = "?", desc = "Save session with a new name" })
+
+  -- :BufstateLoad [name] — load a session (snacks picker if no name)
+  vim.api.nvim_create_user_command("BufstateLoad", function(cmd_opts)
+    local function do_load(name)
+      if stop_lsp_on_session_load then
+        require("bufstate.lsp").stop_all_clients()
+      end
+      loading = true
+      local ok, err = session.load(name)
+      loading = false
+      if not ok then
+        vim.notify(err or "Failed to load session", vim.log.levels.ERROR)
+      else
+        post_load_rebuild(stop_lsp_on_session_load)
+        vim.notify("Session loaded: " .. name, vim.log.levels.INFO)
+      end
+    end
+    if cmd_opts.args ~= "" then
+      do_load(cmd_opts.args)
+    else
+      local sessions = storage.list()
+      if #sessions == 0 then
+        vim.notify("No sessions found", vim.log.levels.WARN)
+        return
+      end
+      ui.show_session_picker(sessions, function(s) do_load(s.name) end, {
+        prompt = "Load session: ",
+      })
+    end
+  end, { nargs = "?", desc = "Load a session" })
+
+  -- :BufstateDelete [name] — delete a session (snacks picker if no name)
+  vim.api.nvim_create_user_command("BufstateDelete", function(cmd_opts)
+    local function do_delete(name)
+      local ok, err = session.delete(name)
+      if not ok then
+        vim.notify(err or "Failed to delete session", vim.log.levels.ERROR)
+      else
+        vim.notify("Session deleted: " .. name, vim.log.levels.INFO)
+      end
+    end
+    if cmd_opts.args ~= "" then
+      do_delete(cmd_opts.args)
+    else
+      local sessions = storage.list()
+      if #sessions == 0 then
+        vim.notify("No sessions found", vim.log.levels.WARN)
+        return
+      end
+      ui.show_session_picker(sessions, function(s) do_delete(s.name) end, {
+        prompt = "Delete session: ",
+      })
+    end
+  end, { nargs = "?", desc = "Delete a session" })
+
+  -- :BufstateNew [name] — save current then start a fresh workspace
+  vim.api.nvim_create_user_command("BufstateNew", function(cmd_opts)
+    local function do_new(name)
+      local ok, err = session.new(name)
+      if not ok then
+        vim.notify(err or "Failed to create session", vim.log.levels.ERROR)
+      else
+        vim.notify("New session: " .. name, vim.log.levels.INFO)
+      end
+    end
+    if cmd_opts.args ~= "" then
+      do_new(cmd_opts.args)
+    else
+      ui.prompt_session_name(do_new, { prompt = "New session name: " })
+    end
+  end, { nargs = "?", desc = "Start a new session (saves current first)" })
+
+  -- :BufstateList — print all sessions
+  vim.api.nvim_create_user_command("BufstateList", function()
+    local sessions = storage.list()
+    if #sessions == 0 then
+      vim.notify("No sessions found", vim.log.levels.WARN)
+      return
+    end
+    local lines = { "bufstate.nvim sessions:" }
+    for _, s in ipairs(sessions) do
+      local ts     = os.date("%Y-%m-%d %H:%M", s.mtime)
+      local marker = s.name == session.current and " *" or ""
+      lines[#lines + 1] = string.format("  %s%s  (%s)", s.name, marker, ts)
+    end
+    vim.notify(table.concat(lines, "\n"), vim.log.levels.INFO, { title = "bufstate.nvim" })
+  end, { desc = "List all saved sessions" })
+
+  -- ── autosave ────────────────────────────────────────────────────────────────
+
+  local autosave = require("bufstate.autosave")
+  autosave.setup(_opts.autosave or {}, augroup)
+
+  vim.api.nvim_create_user_command("AutosaveStatus", function()
+    local s = autosave.get_status()
+    vim.notify(
+      string.format(
+        "Autosave — enabled: %s | paused: %s | session: %s | last save: %s | interval: %.1f min",
+        s.enabled and "yes" or "no",
+        s.paused  and "yes" or "no",
+        s.session,
+        s.last_save,
+        s.interval_minutes
+      ),
+      vim.log.levels.INFO,
+      { title = "bufstate.nvim" }
+    )
+  end, { desc = "Show autosave status" })
+
+  vim.api.nvim_create_user_command("AutosavePause",  autosave.pause,  { desc = "Pause autosave" })
+  vim.api.nvim_create_user_command("AutosaveResume", autosave.resume, { desc = "Resume autosave" })
+  vim.api.nvim_create_user_command("AutosaveNow", function()
+    autosave.perform_autosave()
+    vim.notify("Autosave triggered", vim.log.levels.INFO)
+  end, { desc = "Trigger autosave immediately" })
+
+  -- ── autoload last session on startup ────────────────────────────────────────
+
+  if _opts.autoload_last_session then
+    local function do_autoload()
+      if #vim.fn.argv() > 0 then return end -- nvim opened with file args
+      local name = storage.get_last_loaded()
+      if name then
+        if stop_lsp_on_session_load then
+          require("bufstate.lsp").stop_all_clients()
+        end
+        loading = true
+        local ok, err = session.load(name)
+        loading = false
+        if not ok then
+          vim.notify("Failed to auto-load session: " .. (err or ""), vim.log.levels.WARN)
+        else
+          post_load_rebuild(stop_lsp_on_session_load)
+          vim.notify("Session auto-loaded: " .. name, vim.log.levels.INFO)
+        end
+      end
+    end
+
+    if vim.v.vim_did_enter == 1 then
+      vim.schedule(do_autoload)
+    else
+      vim.api.nvim_create_autocmd("VimEnter", {
+        group    = augroup,
+        once     = true,
+        callback = function() vim.schedule(do_autoload) end,
+      })
+    end
+  end
+
+  vim.g.bufstate_setup_called = 1
 end
 
 return M
