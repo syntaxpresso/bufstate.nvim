@@ -1,13 +1,15 @@
--- LSP module for bufstate
--- Centralized LSP client management
+-- lua/bufstate/lsp.lua
+-- LSP client management: stop/restart clients per-tab or globally.
+-- Adapted to read buffer ownership from bufstate.state rather than the old
+-- tabfilter module.
+
 local M = {}
 
--- Internal helper: Stop a set of client IDs
--- @param client_ids table: Dictionary of client_id -> client
--- @return number: Count of clients stopped
+-- ── internal ──────────────────────────────────────────────────────────────────
+
 local function stop_client_ids(client_ids)
 	local count = 0
-	for client_id, _ in pairs(client_ids) do
+	for client_id in pairs(client_ids) do
 		count = count + 1
 		vim.schedule(function()
 			vim.lsp.stop_client(client_id, true)
@@ -16,68 +18,53 @@ local function stop_client_ids(client_ids)
 	return count
 end
 
--- Stop LSP clients for buffers belonging to a specific tab
--- @param tabnr number: Tab number
--- @param buffer_tabs table: Mapping of bufnr -> {tab1, tab2, ...} from tabfilter state
--- @return number: Count of unique clients stopped
-function M.stop_clients_for_tab(tabnr, buffer_tabs)
-	local clients_to_stop = {}
+-- ── public API ────────────────────────────────────────────────────────────────
 
-	for bufnr, tabs in pairs(buffer_tabs) do
-		if vim.tbl_contains(tabs, tabnr) and vim.api.nvim_buf_is_valid(bufnr) then
-			local clients = vim.lsp.get_clients({ bufnr = bufnr })
-			for _, client in ipairs(clients) do
-				clients_to_stop[client.id] = client
+--- Stop LSP clients for all buffers owned by `tab` according to state.db.
+---@param tab integer  tab page handle
+---@return integer  count of unique clients stopped
+function M.stop_clients_for_tab(tab)
+	local state = require("bufstate.state")
+	local clients_to_stop = {}
+	for _, bufnr in ipairs(state.get(tab)) do
+		if vim.api.nvim_buf_is_valid(bufnr) then
+			for _, client in ipairs(vim.lsp.get_clients({ bufnr = bufnr })) do
+				clients_to_stop[client.id] = true
 			end
 		end
 	end
-
 	return stop_client_ids(clients_to_stop)
 end
 
--- Stop all LSP clients for all currently open buffers
--- @return number: Count of unique clients stopped
+--- Stop all LSP clients attached to any open buffer.
+---@return integer  count of unique clients stopped
 function M.stop_all_clients()
 	local clients_to_stop = {}
-
-	-- Get clients from all valid buffers
 	for _, bufnr in ipairs(vim.api.nvim_list_bufs()) do
 		if vim.api.nvim_buf_is_valid(bufnr) then
-			local clients = vim.lsp.get_clients({ bufnr = bufnr })
-			for _, client in ipairs(clients) do
-				clients_to_stop[client.id] = client
+			for _, client in ipairs(vim.lsp.get_clients({ bufnr = bufnr })) do
+				clients_to_stop[client.id] = true
 			end
 		end
 	end
-
 	return stop_client_ids(clients_to_stop)
 end
 
--- Restart LSP clients for specific buffer numbers
--- Triggers FileType autocmd to reattach LSP
--- @param bufnrs table: List of buffer numbers
+--- Trigger FileType autocmd on each buffer to reattach LSP clients.
+---@param bufnrs integer[]
 function M.restart_clients_for_buffers(bufnrs)
 	vim.schedule(function()
 		for _, bufnr in ipairs(bufnrs) do
 			if vim.api.nvim_buf_is_valid(bufnr) then
-				local bufname = vim.api.nvim_buf_get_name(bufnr)
+				local name = vim.api.nvim_buf_get_name(bufnr)
 				local buftype = vim.api.nvim_get_option_value("buftype", { buf = bufnr })
-
-				-- Only restart LSP for real file buffers
-				if bufname ~= "" and buftype == "" then
-					-- Check if buffer has LSP clients attached
-					local clients = vim.lsp.get_clients({ bufnr = bufnr })
-
-					-- If no clients are attached, trigger FileType autocmd to restart LSP
-					if #clients == 0 then
-						local filetype = vim.api.nvim_get_option_value("filetype", { buf = bufnr })
-						if filetype ~= "" then
-							-- Trigger FileType event which will cause LSP to attach
-							vim.api.nvim_exec_autocmds("FileType", {
-								buffer = bufnr,
-								data = { filetype = filetype },
-							})
-						end
+				local ft = vim.api.nvim_get_option_value("filetype", { buf = bufnr })
+				if name ~= "" and buftype == "" and ft ~= "" then
+					if #vim.lsp.get_clients({ bufnr = bufnr }) == 0 then
+						vim.api.nvim_exec_autocmds("FileType", {
+							buffer = bufnr,
+							data = { filetype = ft },
+						})
 					end
 				end
 			end
@@ -85,19 +72,11 @@ function M.restart_clients_for_buffers(bufnrs)
 	end)
 end
 
--- Restart LSP clients for buffers in a specific tab
--- @param tabnr number: Tab number
--- @param buffer_tabs table: Mapping of bufnr -> {tab1, tab2, ...} from tabfilter state
-function M.restart_clients_for_tab(tabnr, buffer_tabs)
-	local bufnrs = {}
-
-	for bufnr, tabs in pairs(buffer_tabs) do
-		if vim.tbl_contains(tabs, tabnr) and vim.api.nvim_buf_is_valid(bufnr) then
-			table.insert(bufnrs, bufnr)
-		end
-	end
-
-	M.restart_clients_for_buffers(bufnrs)
+--- Restart LSP for all buffers owned by `tab` according to state.db.
+---@param tab integer  tab page handle
+function M.restart_clients_for_tab(tab)
+	local state = require("bufstate.state")
+	M.restart_clients_for_buffers(state.get(tab))
 end
 
 return M
