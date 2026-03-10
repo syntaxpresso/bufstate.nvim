@@ -263,6 +263,7 @@ function M.setup(_opts)
 
 	-- LSP config
 	local stop_lsp_on_session_load = _opts.stop_lsp_on_session_load ~= false -- default true
+	local stop_lsp_on_tab_leave = _opts.stop_lsp_on_tab_leave ~= false -- default true
 
 	-- Wire session.lua's save calls through our relist-aware wrapper so that
 	-- :mksession always sees all buffers across all tabs (not just the current
@@ -317,7 +318,11 @@ function M.setup(_opts)
 	vim.api.nvim_create_autocmd("TabLeave", {
 		group = augroup,
 		callback = function()
+			local tab = vim.api.nvim_get_current_tabpage()
 			unlist_all()
+			if stop_lsp_on_tab_leave then
+				require("bufstate.lsp").stop_clients_for_tab(tab)
+			end
 		end,
 	})
 
