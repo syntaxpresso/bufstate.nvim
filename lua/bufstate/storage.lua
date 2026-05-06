@@ -29,7 +29,16 @@ end
 ---@param name string
 function M.save(name)
 	local path = M.session_path(name)
+	local save_sessionoptions = vim.o.sessionoptions
+	local opts = vim.opt.sessionoptions:get()
+	for _, required in ipairs({ "buffers", "tabpages" }) do
+		if not vim.tbl_contains(opts, required) then
+			vim.opt.sessionoptions:append(required)
+		end
+	end
+
 	local ok, err = pcall(vim.cmd, "mksession! " .. vim.fn.fnameescape(path))
+	vim.o.sessionoptions = save_sessionoptions
 	if not ok then
 		error("Failed to save session '" .. name .. "': " .. (err or "unknown error"))
 	end
@@ -44,6 +53,10 @@ function M.load(name)
 	if vim.fn.filereadable(path) == 0 then
 		return false, "Session not found: " .. name
 	end
+
+	-- Avoid reusing ownership metadata from a previously sourced session when
+	-- loading older session files that do not contain a bufstate metadata block.
+	vim.g.bufstate_session_buffers = nil
 
 	-- Close all floating windows before sourcing. The session file contains an
 	-- `only` command that closes all but one window; if the only remaining window
