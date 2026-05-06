@@ -56,7 +56,7 @@ function M.load(name)
 
 	-- Avoid reusing ownership metadata from a previously sourced session when
 	-- loading older session files that do not contain a bufstate metadata block.
-	vim.g.bufstate_session_buffers = nil
+	M._loaded_session_buffers = nil
 
 	-- Close all floating windows before sourcing. The session file contains an
 	-- `only` command that closes all but one window; if the only remaining window

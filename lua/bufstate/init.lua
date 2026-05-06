@@ -86,14 +86,15 @@ local function append_session_buffers(name, buffers_by_tab)
 	end
 	file:write('" bufstate.nvim metadata: tab buffer ownership\n')
 	file:write("lua << BSTATE_EOF\n")
-	file:write("vim.g.bufstate_session_buffers = ")
+	file:write('require("bufstate.storage")._loaded_session_buffers = ')
 	file:write(vim.inspect(buffers_by_tab))
 	file:write("\nBSTATE_EOF\n")
 	file:close()
 end
 
 local function restore_session_buffers_from_metadata(tabs)
-	local saved = vim.g.bufstate_session_buffers
+	local saved = storage._loaded_session_buffers
+	storage._loaded_session_buffers = nil
 	if type(saved) ~= "table" then
 		return false
 	end
@@ -109,11 +110,12 @@ local function restore_session_buffers_from_metadata(tabs)
 	end
 
 	local restored = false
-	for tab_index, paths in pairs(saved) do
-		local tab = tabs[tonumber(tab_index)]
+	for tab_index, paths in ipairs(saved) do
+		local tab = tabs[tab_index]
 		if tab and type(paths) == "table" then
-			for _, path in ipairs(paths) do
-				local buf = buffers_by_path[normalized_buf_path(path)]
+			for _, saved_path in ipairs(paths) do
+				local normalized_path = normalized_buf_path(saved_path)
+				local buf = normalized_path and buffers_by_path[normalized_path]
 				if buf then
 					state.add(tab, buf)
 					restored = true
