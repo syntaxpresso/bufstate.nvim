@@ -19,6 +19,16 @@ function M.session_path(name)
 	return M.session_dir() .. "/" .. name .. ".vim"
 end
 
+--- Path to the sidecar file holding bufstate's tab→buffer ownership map.
+--- Kept separate from the `.vim` session so the session file stays pure
+--- native :mksession output (sourceable on its own) and the ownership data
+--- is inert JSON rather than executable Lua. Does not collide with M.list(),
+--- which globs only `*.vim`.
+---@param name string
+function M.metadata_path(name)
+	return M.session_dir() .. "/" .. name .. ".bufstate.json"
+end
+
 function M.last_loaded_path()
 	return M.session_dir() .. "/.last_loaded"
 end
@@ -45,6 +55,42 @@ function M.save(name)
 	return true
 end
 
+--- Persist bufstate's tab→buffer ownership map alongside the session file.
+--- buffers_by_tab is a 1-based array where entry i holds the absolute, normalized
+--- buffer paths owned by the i-th tab.
+---@param name string
+---@param buffers_by_tab string[][]
+function M.save_metadata(name, buffers_by_tab)
+	local path = M.metadata_path(name)
+	local file, open_err = io.open(path, "w")
+	if not file then
+		error("Failed to write bufstate metadata for session '" .. name .. "': " .. (open_err or "unknown error"))
+	end
+	file:write(vim.json.encode({ version = 1, tabs = buffers_by_tab }))
+	file:close()
+	return true
+end
+
+--- Read the tab→buffer ownership map for a session.
+--- Returns the `tabs` array, or an empty table when the sidecar is missing or
+--- unreadable (Null Object — callers never need to nil-check; an empty result
+--- transparently triggers the legacy reconstruction fallback).
+---@param name string
+---@return string[][]
+function M.load_metadata(name)
+	local file = io.open(M.metadata_path(name), "r")
+	if not file then
+		return {}
+	end
+	local contents = file:read("*all")
+	file:close()
+	local ok, decoded = pcall(vim.json.decode, contents)
+	if not ok or type(decoded) ~= "table" or type(decoded.tabs) ~= "table" then
+		return {}
+	end
+	return decoded.tabs
+end
+
 --- Source a named session file.
 ---@param name string
 ---@return boolean ok, string|nil err
@@ -53,10 +99,6 @@ function M.load(name)
 	if vim.fn.filereadable(path) == 0 then
 		return false, "Session not found: " .. name
 	end
-
-	-- Avoid reusing ownership metadata from a previously sourced session when
-	-- loading older session files that do not contain a bufstate metadata block.
-	M._loaded_session_buffers = nil
 
 	-- Close all floating windows before sourcing. The session file contains an
 	-- `only` command that closes all but one window; if the only remaining window
@@ -96,6 +138,8 @@ function M.delete(name)
 		return false, "Session not found: " .. name
 	end
 	vim.fn.delete(path)
+	-- Remove the ownership sidecar too; ignore if it was never written.
+	vim.fn.delete(M.metadata_path(name))
 	return true
 end
 

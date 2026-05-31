@@ -78,24 +78,9 @@ local function collect_session_buffers()
 	return result
 end
 
-local function append_session_buffers(name, buffers_by_tab)
-	local path = storage.session_path(name)
-	local file, err = io.open(path, "ab")
-	if not file then
-		error("Failed to append bufstate metadata for session '" .. name .. "': " .. (err or "unknown error"))
-	end
-	file:write('" bufstate.nvim metadata: tab buffer ownership\n')
-	file:write("lua << BSTATE_EOF\n")
-	file:write('require("bufstate.storage")._loaded_session_buffers = ')
-	file:write(vim.inspect(buffers_by_tab))
-	file:write("\nBSTATE_EOF\n")
-	file:close()
-end
-
-local function restore_session_buffers_from_metadata(tabs)
-	local saved = storage._loaded_session_buffers
-	storage._loaded_session_buffers = nil
-	if type(saved) ~= "table" then
+local function restore_session_buffers_from_metadata(name, tabs)
+	local saved = storage.load_metadata(name)
+	if vim.tbl_isempty(saved) then
 		return false
 	end
 
@@ -139,16 +124,18 @@ local function add_all_normal_buffers_to_tab(tab)
 end
 
 --- Rebuild state.db from the live tab/window layout after a session load.
---- New bufstate session files carry explicit tab->buffer metadata, which is
---- authoritative. Older session files fall back to the native window layout:
+--- New bufstate sessions carry an explicit tab->buffer ownership sidecar, which
+--- is authoritative. Older sessions without a sidecar fall back to the native
+--- window layout:
 ---   • Window buffers  — nvim_win_get_buf (the buffer visible in the window)
 ---   • Alternate bufs  — bufnr('#') inside each window (best-effort only)
 --- All tabs a buffer appears in are recorded (a buffer in two tabs → owned by both).
+---@param name string
 ---@param restart_lsp boolean
-local function post_load_rebuild(restart_lsp)
+local function post_load_rebuild(name, restart_lsp)
 	state.reset()
 	local tabs = vim.api.nvim_list_tabpages()
-	local restored_from_metadata = restore_session_buffers_from_metadata(tabs)
+	local restored_from_metadata = restore_session_buffers_from_metadata(name, tabs)
 	if not restored_from_metadata then
 		for _, tab in ipairs(tabs) do
 			local wins = vim.api.nvim_tabpage_list_wins(tab)
@@ -210,7 +197,7 @@ local function do_save(name)
 	relist_all_for_save()
 	local ok, err = pcall(function()
 		storage.save(name) -- raises on failure
-		append_session_buffers(name, buffers_by_tab)
+		storage.save_metadata(name, buffers_by_tab) -- raises on failure
 	end)
 	filter_for_tab(vim.api.nvim_get_current_tabpage())
 	if not ok then
@@ -549,7 +536,7 @@ function M.setup(_opts)
 			if not ok then
 				vim.notify(err or "Failed to load session", vim.log.levels.ERROR)
 			else
-				post_load_rebuild(stop_lsp_on_session_load)
+				post_load_rebuild(name, stop_lsp_on_session_load)
 				vim.notify("Session loaded: " .. name, vim.log.levels.INFO)
 			end
 		end
@@ -674,7 +661,7 @@ function M.setup(_opts)
 				if not ok then
 					vim.notify("Failed to auto-load session: " .. (err or ""), vim.log.levels.WARN)
 				else
-					post_load_rebuild(stop_lsp_on_session_load)
+					post_load_rebuild(name, stop_lsp_on_session_load)
 					vim.notify("Session auto-loaded: " .. name, vim.log.levels.INFO)
 				end
 			end
