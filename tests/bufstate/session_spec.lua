@@ -271,4 +271,28 @@ describe("bufstate.session", function()
 			assert.equals("alternate-b", session.current)
 		end)
 	end)
+
+	describe("current session filtering", function()
+		it("excludes the active session from the load list", function()
+			session.set_save_fn(function(name)
+				storage.save(name)
+				session.current = name
+			end)
+			session.save("session-one")
+			session.save("session-two")
+			session.load("session-one")
+
+			local all = storage.list()
+			local filtered = vim.tbl_filter(function(s)
+				return s.name ~= session.current
+			end, all)
+
+			local names = {}
+			for _, s in ipairs(filtered) do
+				names[#names + 1] = s.name
+			end
+			assert.is_false(vim.tbl_contains(names, "session-one"))
+			assert.is_true(vim.tbl_contains(names, "session-two"))
+		end)
+	end)
 end)
