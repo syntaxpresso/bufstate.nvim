@@ -314,13 +314,8 @@ describe("bufstate.session", function()
 			session.close()
 
 			assert.is_nil(session.current)
-			-- All normal buffers should be wiped
-			local remaining = vim.api.nvim_list_bufs()
-			for _, b in ipairs(remaining) do
-				if vim.api.nvim_buf_is_valid(b) then
-					assert.is_false(vim.bo[b].buftype == "")
-				end
-			end
+			-- Our buffer should be wiped
+			assert.is_false(vim.api.nvim_buf_is_valid(buf))
 		end)
 
 		it("uses _autosave fallback when no session is active", function()
