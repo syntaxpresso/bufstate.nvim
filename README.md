@@ -125,6 +125,7 @@ return {
 -- Bufferline integration (uncomment to use):
 -- require("bufferline").setup({
 --   options = {
+--     always_show_bufferline = true,
 --     custom_filter = require("bufstate").buf_filter,
 --     close_command = function(buf)
 --       require("bufstate").bdelete(buf)
@@ -260,11 +261,12 @@ local bufstate = require("bufstate")
 bufstate.buf_filter(buf: integer) -> boolean
 ```
 
-Returns whether `buf` belongs to the current tab. Use with bufferline plugins:
+Returns whether `buf` belongs to the current tab. Wire into bufferline's `custom_filter` option so the tabline only shows buffers from the current workspace:
 
 ```lua
 require("bufferline").setup({
   options = {
+    always_show_bufferline = true,
     custom_filter = require("bufstate").buf_filter,
   },
 })
@@ -277,11 +279,12 @@ bufstate.bdelete(buf?: integer)   -- Safe bdelete, keeps tab alive
 bufstate.bwipeout(buf?: integer)  -- Safe bwipeout, keeps tab alive
 ```
 
-Can be wired into bufferline close actions:
+Can be wired into bufferline's `close_command` option. By default, bufferline uses `:bdelete` which closes the entire tab when it is the last buffer. bufstate's `bdelete` switches to another buffer first, keeping the tab (workspace) alive:
 
 ```lua
 require("bufferline").setup({
   options = {
+    always_show_bufferline = true,
     close_command = function(buf)
       require("bufstate").bdelete(buf)
     end,
