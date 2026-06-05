@@ -600,6 +600,12 @@ function M.setup(_opts)
 		end
 	end, { nargs = "?", desc = "Start a new session (saves current first)" })
 
+	-- :BufstateClose — save current then wipe everything, leave a clean workspace
+	vim.api.nvim_create_user_command("BufstateClose", function()
+		session.close()
+		vim.notify("Workspace closed — use :BufstateLoad to open another session", vim.log.levels.INFO)
+	end, { desc = "Save current workspace and close it (clears buffers and tabs)" })
+
 	-- :BufstateList — print all sessions
 	vim.api.nvim_create_user_command("BufstateList", function()
 		local sessions = storage.list()

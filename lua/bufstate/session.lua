@@ -110,6 +110,26 @@ function M.new(name)
 	return true
 end
 
+--- Save current workspace, wipe all buffers and tabs, leave a clean slate.
+--- Does not prompt — the user can follow up with :BufstateLoad to switch context.
+function M.close()
+	if M.current then
+		pcall(M.save, M.current)
+	else
+		pcall(M.save, "_autosave")
+	end
+
+	clear_buffers()
+
+	local tabs = vim.api.nvim_list_tabpages()
+	for i = #tabs, 2, -1 do
+		pcall(vim.api.nvim_set_current_tabpage, tabs[i])
+		pcall(vim.cmd, "tabclose!")
+	end
+
+	M.current = nil
+end
+
 --- List all saved sessions.
 ---@return { name: string, path: string, mtime: integer }[]
 function M.list()
