@@ -31,6 +31,7 @@ https://github.com/user-attachments/assets/9162f9a5-8576-4f95-b01b-0f2a1ab10f17
 - **Load** (`BufstateLoad`) — Restores a session interactively via fuzzy picker
 - **Delete** (`BufstateDelete`) — Removes a session with picker confirmation
 - **New** (`BufstateNew`) — Saves the current workspace, then clears everything for a fresh start
+- **Close** (`BufstateClose`) — Saves the current workspace and closes it, leaving a clean slate. Follow up with `:BufstateLoad` to switch context.
 - **List** (`BufstateList`) — Shows all saved sessions with timestamps and current marker
 - **Auto-load on startup** — Optionally restores the last used session when Neovim opens
 - **Interactive picker** — Fuzzy-search through sessions with preview (snacks.nvim integration, falls back to `vim.ui.select`)
@@ -224,6 +225,7 @@ vim.g.bufstate_no_default_maps = 1
 | `:BufstateLoad`   | `[name]`  | Load a session (shows picker if no name)        |
 | `:BufstateDelete` | `[name]`  | Delete a session (shows picker if no name)      |
 | `:BufstateNew`    | `[name]`  | Save current, then start a fresh workspace      |
+| `:BufstateClose`  | None      | Save current and close workspace (clears buffers/tabs) |
 | `:BufstateList`   | None      | List all sessions with timestamps and marker    |
 
 ### Safe Delete Commands
