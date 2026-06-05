@@ -295,4 +295,35 @@ describe("bufstate.session", function()
 			assert.is_true(vim.tbl_contains(names, "session-two"))
 		end)
 	end)
+
+	describe("close", function()
+		before_each(function()
+			session.set_save_fn(function(name)
+				storage.save(name)
+				session.current = name
+			end)
+			session.save("close-session")
+		end)
+
+		it("saves current, wipes buffers, and sets current to nil", function()
+			session.close()
+			assert.is_nil(session.current)
+		end)
+
+		it("uses _autosave fallback when no session is active", function()
+			session.current = nil
+			local ok = pcall(session.close)
+			assert.is_true(ok)
+		end)
+
+		it("closes extra tabs, leaving only one", function()
+			vim.cmd("tabnew")
+			vim.cmd("tabnew")
+			assert.equals(3, #vim.api.nvim_list_tabpages())
+
+			session.close()
+
+			assert.equals(1, #vim.api.nvim_list_tabpages())
+		end)
+	end)
 end)
