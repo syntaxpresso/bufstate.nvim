@@ -81,11 +81,10 @@ describe("bufstate.session", function()
 				end
 			end
 
-			assert.is_true(#loaded_names >= #expected_names, string.format(
-				"Expected at least %d buffers restored, got %d",
-				#expected_names,
-				#loaded_names
-			))
+			assert.is_true(
+				#loaded_names >= #expected_names,
+				string.format("Expected at least %d buffers restored, got %d", #expected_names, #loaded_names)
+			)
 		end)
 
 		it("preserves all buffers across multiple tabs after save/load", function()
@@ -145,10 +144,10 @@ describe("bufstate.session", function()
 
 			-- Verify tabs and buffers restored
 			local restored_tabs = vim.api.nvim_list_tabpages()
-			assert.is_true(#restored_tabs >= 2, string.format(
-				"Expected at least 2 tabs restored, got %d",
-				#restored_tabs
-			))
+			assert.is_true(
+				#restored_tabs >= 2,
+				string.format("Expected at least 2 tabs restored, got %d", #restored_tabs)
+			)
 
 			local total_bufs = 0
 			for _, buf in ipairs(vim.api.nvim_list_bufs()) do
@@ -160,10 +159,10 @@ describe("bufstate.session", function()
 					total_bufs = total_bufs + 1
 				end
 			end
-			assert.is_true(total_bufs >= 4, string.format(
-				"Expected at least 4 buffers restored, got %d",
-				total_bufs
-			))
+			assert.is_true(
+				total_bufs >= 4,
+				string.format("Expected at least 4 buffers restored, got %d", total_bufs)
+			)
 		end)
 	end)
 
