@@ -1,0 +1,39 @@
+name: PR Validation
+
+on:
+  pull_request:
+    types: [opened, labeled, unlabeled, synchronize]
+    branches: [main]
+
+jobs:
+  validate-labels:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Check version label
+        env:
+          LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
+        run: |
+          REQUIRED=("documentation" "major" "minor" "patch")
+          PRESENT=()
+
+          for label in "${REQUIRED[@]}"; do
+            count=$(echo "$LABELS" | jq --arg lb "$label" 'map(select(. == $lb)) | length')
+            if [[ "$count" -gt 0 ]]; then
+              PRESENT+=("$label")
+            fi
+          done
+
+          if [[ ${#PRESENT[@]} -eq 0 ]]; then
+            echo "::error::Missing version label. Add one of: documentation, major, minor, patch."
+            exit 1
+          fi
+
+          if [[ ${#PRESENT[@]} -gt 1 ]]; then
+            CONFLICTING=$(printf "'%s', " "${PRESENT[@]}" | sed 's/, $//')
+            echo "::error::Conflicting version labels: ${CONFLICTING}. Use only one of: documentation, major, minor, patch."
+            exit 1
+          fi
+
+          echo "Version label set to: ${PRESENT[0]}"

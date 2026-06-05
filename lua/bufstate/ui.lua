@@ -13,11 +13,14 @@ function M.prompt_session_name(callback, opts)
 	opts = opts or {}
 	local ok, snacks = pcall(require, "snacks")
 	if not ok then
-		vim.ui.input({ prompt = opts.prompt or "Session name: ", default = opts.default or "" }, function(value)
-			if value and value ~= "" then
-				callback(value)
+		vim.ui.input(
+			{ prompt = opts.prompt or "Session name: ", default = opts.default or "" },
+			function(value)
+				if value and value ~= "" then
+					callback(value)
+				end
 			end
-		end)
+		)
 		return
 	end
 

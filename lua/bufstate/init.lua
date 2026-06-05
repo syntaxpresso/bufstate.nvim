@@ -181,7 +181,8 @@ local function db_snapshot()
 	end
 	for tab in pairs(state.db) do
 		if not live[tab] then
-			lines[#lines + 1] = string.format("  tab %d (dead): %d buf(s)", tab, vim.tbl_count(state.db[tab]))
+			lines[#lines + 1] =
+				string.format("  tab %d (dead): %d buf(s)", tab, vim.tbl_count(state.db[tab]))
 		end
 	end
 

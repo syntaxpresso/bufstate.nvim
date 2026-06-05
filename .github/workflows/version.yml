@@ -1,0 +1,71 @@
+name: Calculate Version
+
+on:
+  workflow_call:
+    outputs:
+      version:
+        description: "The calculated semantic version (e.g. 1.2.3)"
+        value: ${{ jobs.version.outputs.version }}
+      should_publish:
+        description: "Whether a release should be published"
+        value: ${{ jobs.version.outputs.should_publish }}
+
+jobs:
+  version:
+    if: >-
+      github.event.pull_request.merged == true &&
+      !contains(github.event.pull_request.labels.*.name, 'documentation')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.calc.outputs.VERSION }}
+      should_publish: ${{ steps.calc.outputs.SHOULD_PUBLISH }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+          ref: main
+      - name: Calculate next version
+        id: calc
+        env:
+          PR_LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
+        run: |
+          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          if [[ -n "$LATEST_TAG" ]]; then
+            CURRENT_VERSION=$(echo "$LATEST_TAG" | sed 's/^[^0-9]*//')
+          else
+            CURRENT_VERSION="0.0.0"
+          fi
+          if [[ ! "$CURRENT_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Could not parse version from tag '$LATEST_TAG'. Falling back to 0.0.0"
+            CURRENT_VERSION="0.0.0"
+          fi
+          echo "Current version: $CURRENT_VERSION"
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT_VERSION"
+          HAS_MAJOR=$(echo "$PR_LABELS" | jq 'map(select(. == "major")) | length')
+          HAS_MINOR=$(echo "$PR_LABELS" | jq 'map(select(. == "minor")) | length')
+          HAS_PATCH=$(echo "$PR_LABELS" | jq 'map(select(. == "patch")) | length')
+          if [[ "$HAS_MAJOR" -gt 0 ]]; then
+            echo "Major version bump"
+            MAJOR=$((MAJOR + 1))
+            MINOR=0
+            PATCH=0
+          elif [[ "$HAS_MINOR" -gt 0 ]]; then
+            echo "Minor version bump"
+            MINOR=$((MINOR + 1))
+            PATCH=0
+          elif [[ "$HAS_PATCH" -gt 0 ]]; then
+            echo "Patch version bump"
+            PATCH=$((PATCH + 1))
+          else
+            echo "No version label found (major/minor/patch). Skipping release."
+            echo "SHOULD_PUBLISH=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          NEW_VERSION="${MAJOR}.${MINOR}.${PATCH}"
+          echo "New version: $NEW_VERSION"
+          echo "VERSION=$NEW_VERSION" >> $GITHUB_OUTPUT
+          echo "SHOULD_PUBLISH=true" >> $GITHUB_OUTPUT
