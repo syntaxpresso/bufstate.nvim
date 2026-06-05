@@ -120,6 +120,7 @@ return {
   --   { "<leader>ql", "<cmd>BufstateLoad<CR>",   desc = "Load session" },
   --   { "<leader>qd", "<cmd>BufstateDelete<CR>", desc = "Delete session" },
   --   { "<leader>qn", "<cmd>BufstateNew<CR>",    desc = "New session" },
+  --   { "<leader>qc", "<cmd>BufstateClose<CR>", desc = "Close workspace" },
   -- },
 }
 
