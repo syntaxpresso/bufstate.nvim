@@ -545,6 +545,11 @@ function M.setup(_opts)
 			do_load(cmd_opts.args)
 		else
 			local sessions = storage.list()
+			if session.current then
+				sessions = vim.tbl_filter(function(s)
+					return s.name ~= session.current
+				end, sessions)
+			end
 			if #sessions == 0 then
 				vim.notify("No sessions found", vim.log.levels.WARN)
 				return
@@ -619,12 +624,7 @@ function M.setup(_opts)
 	-- :BufstateList — print all sessions
 	vim.api.nvim_create_user_command("BufstateList", function()
 		local sessions = storage.list()
-			if session.current then
-				sessions = vim.tbl_filter(function(s)
-					return s.name ~= session.current
-				end, sessions)
-			end
-			if #sessions == 0 then
+		if #sessions == 0 then
 				vim.notify("No sessions found", vim.log.levels.WARN)
 				return
 			end
