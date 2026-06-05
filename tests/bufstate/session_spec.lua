@@ -253,7 +253,7 @@ describe("bufstate.session", function()
 			assert.is_true(ok, err)
 			ok, err = session.load("alternate-b")
 			assert.is_true(ok, err)
-			assert.equals("alternate-b", session.previous)
+			assert.equals("alternate-a", session.previous)
 
 			ok, err = session.alternate()
 			assert.is_true(ok, err)
