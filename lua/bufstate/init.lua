@@ -42,32 +42,124 @@ local function unlist_all()
 	filtering = false
 end
 
+local function normalized_buf_path(name)
+	if not name or name == "" then
+		return nil
+	end
+	local path = vim.fn.fnamemodify(name, ":p")
+	if path == "" then
+		return nil
+	end
+	if vim.fs and vim.fs.normalize then
+		path = vim.fs.normalize(path)
+	end
+	if vim.fn.has("win32") == 1 or vim.fn.has("win64") == 1 then
+		path = path:lower()
+	end
+	return path
+end
+
+local function collect_session_buffers()
+	local result = {}
+	for tab_index, tab in ipairs(vim.api.nvim_list_tabpages()) do
+		local paths = {}
+		local seen = {}
+		for _, buf in ipairs(state.get(tab)) do
+			if vim.api.nvim_buf_is_valid(buf) and vim.bo[buf].buftype == "" then
+				local path = normalized_buf_path(vim.api.nvim_buf_get_name(buf))
+				if path and not seen[path] then
+					seen[path] = true
+					paths[#paths + 1] = path
+				end
+			end
+		end
+		result[tab_index] = paths
+	end
+	return result
+end
+
+local function restore_session_buffers_from_metadata(name, tabs)
+	local saved = storage.load_metadata(name)
+	if vim.tbl_isempty(saved) then
+		return false
+	end
+
+	local buffers_by_path = {}
+	for _, buf in ipairs(vim.api.nvim_list_bufs()) do
+		if vim.api.nvim_buf_is_valid(buf) and vim.bo[buf].buftype == "" then
+			local path = normalized_buf_path(vim.api.nvim_buf_get_name(buf))
+			if path then
+				buffers_by_path[path] = buf
+			end
+		end
+	end
+
+	local restored = false
+	for tab_index, paths in ipairs(saved) do
+		local tab = tabs[tab_index]
+		if tab and type(paths) == "table" then
+			for _, saved_path in ipairs(paths) do
+				local normalized_path = normalized_buf_path(saved_path)
+				local buf = normalized_path and buffers_by_path[normalized_path]
+				if buf then
+					state.add(tab, buf)
+					restored = true
+				end
+			end
+		end
+	end
+	return restored
+end
+
+local function add_all_normal_buffers_to_tab(tab)
+	for _, buf in ipairs(vim.api.nvim_list_bufs()) do
+		if
+			vim.api.nvim_buf_is_valid(buf)
+			and vim.bo[buf].buftype == ""
+			and vim.api.nvim_buf_get_name(buf) ~= ""
+		then
+			state.add(tab, buf)
+		end
+	end
+end
+
 --- Rebuild state.db from the live tab/window layout after a session load.
---- This is the authoritative post-load source of tab→buffer assignment:
+--- New bufstate sessions carry an explicit tab->buffer ownership sidecar, which
+--- is authoritative. Older sessions without a sidecar fall back to the native
+--- window layout:
 ---   • Window buffers  — nvim_win_get_buf (the buffer visible in the window)
----   • Alternate bufs  — bufnr('#') inside each window (records balt entries
----                       that :mksession writes for background buffers)
+---   • Alternate bufs  — bufnr('#') inside each window (best-effort only)
 --- All tabs a buffer appears in are recorded (a buffer in two tabs → owned by both).
+---@param name string
 ---@param restart_lsp boolean
-local function post_load_rebuild(restart_lsp)
+local function post_load_rebuild(name, restart_lsp)
 	state.reset()
 	local tabs = vim.api.nvim_list_tabpages()
-	for _, tab in ipairs(tabs) do
-		local wins = vim.api.nvim_tabpage_list_wins(tab)
-		for _, win in ipairs(wins) do
-			-- Primary buffer displayed in this window
-			local buf = vim.api.nvim_win_get_buf(win)
-			if vim.api.nvim_buf_is_valid(buf) and vim.bo[buf].buftype == "" then
-				state.add(tab, buf)
+	local restored_from_metadata = restore_session_buffers_from_metadata(name, tabs)
+	if not restored_from_metadata then
+		for _, tab in ipairs(tabs) do
+			local wins = vim.api.nvim_tabpage_list_wins(tab)
+			for _, win in ipairs(wins) do
+				-- Primary buffer displayed in this window
+				local buf = vim.api.nvim_win_get_buf(win)
+				if vim.api.nvim_buf_is_valid(buf) and vim.bo[buf].buftype == "" then
+					state.add(tab, buf)
+				end
+				-- Best-effort legacy fallback: older sessions did not contain
+				-- bufstate's explicit ownership metadata, so use Vim's alternate
+				-- buffer as a hint for hidden buffers.
+				local alt = vim.api.nvim_win_call(win, function()
+					return vim.fn.bufnr("#")
+				end)
+				if alt and alt > 0 and vim.api.nvim_buf_is_valid(alt) and vim.bo[alt].buftype == "" then
+					state.add(tab, alt)
+				end
 			end
-			-- Alternate buffer for this window (set by `balt` in the session file —
-			-- this is how :mksession records background/non-windowed buffers per tab)
-			local alt = vim.api.nvim_win_call(win, function()
-				return vim.fn.bufnr("#")
-			end)
-			if alt and alt > 0 and vim.api.nvim_buf_is_valid(alt) and vim.bo[alt].buftype == "" then
-				state.add(tab, alt)
-			end
+		end
+		if #tabs == 1 then
+			-- Older bufstate sessions only have :mksession's global badd preamble.
+			-- In a single-tab session every normal named buffer belongs to that tab.
+			add_all_normal_buffers_to_tab(tabs[1])
 		end
 	end
 	local current_tab = vim.api.nvim_get_current_tabpage()
@@ -101,9 +193,16 @@ end
 --- Raises on failure (same contract as storage.save).
 ---@param name string
 local function do_save(name)
+	local buffers_by_tab = collect_session_buffers()
 	relist_all_for_save()
-	storage.save(name) -- raises on failure
+	local ok, err = pcall(function()
+		storage.save(name) -- raises on failure
+		storage.save_metadata(name, buffers_by_tab) -- raises on failure
+	end)
 	filter_for_tab(vim.api.nvim_get_current_tabpage())
+	if not ok then
+		error(err, 0)
+	end
 	session.current = name
 end
 
@@ -438,7 +537,7 @@ function M.setup(_opts)
 			if not ok then
 				vim.notify(err or "Failed to load session", vim.log.levels.ERROR)
 			else
-				post_load_rebuild(stop_lsp_on_session_load)
+				post_load_rebuild(name, stop_lsp_on_session_load)
 				vim.notify("Session loaded: " .. name, vim.log.levels.INFO)
 			end
 		end
@@ -563,7 +662,7 @@ function M.setup(_opts)
 				if not ok then
 					vim.notify("Failed to auto-load session: " .. (err or ""), vim.log.levels.WARN)
 				else
-					post_load_rebuild(stop_lsp_on_session_load)
+					post_load_rebuild(name, stop_lsp_on_session_load)
 					vim.notify("Session auto-loaded: " .. name, vim.log.levels.INFO)
 				end
 			end
