@@ -15,28 +15,32 @@ jobs:
         env:
           LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
         run: |
-          REQUIRED=("documentation" "major" "minor" "patch")
-          PRESENT=()
+          VERSION_LABELS=("major" "minor" "patch")
+          DOC_LABEL="documentation"
 
-          for label in "${REQUIRED[@]}"; do
+          VERSION_PRESENT=()
+          for label in "${VERSION_LABELS[@]}"; do
             count=$(echo "$LABELS" | jq --arg lb "$label" 'map(select(. == $lb)) | length')
             if [[ "$count" -gt 0 ]]; then
-              PRESENT+=("$label")
+              VERSION_PRESENT+=("$label")
             fi
           done
 
-          if [[ ${#PRESENT[@]} -eq 0 ]]; then
+          HAS_DOC=$(echo "$LABELS" | jq 'map(select(. == "documentation")) | length')
+
+          if [[ ${#VERSION_PRESENT[@]} -eq 0 && "$HAS_DOC" -eq 0 ]]; then
             echo "::error::Missing version label. Add one of: documentation, major, minor, patch."
             exit 1
           fi
 
-          if [[ ${#PRESENT[@]} -gt 1 ]]; then
-            CONFLICTING=$(printf "'%s', " "${PRESENT[@]}" | sed 's/, $//')
-            echo "::error::Conflicting version labels: ${CONFLICTING}. Use only one of: documentation, major, minor, patch."
+          if [[ ${#VERSION_PRESENT[@]} -gt 1 ]]; then
+            CONFLICTING=$(printf "'%s', " "${VERSION_PRESENT[@]}" | sed 's/, $//')
+            echo "::error::Conflicting version labels: ${CONFLICTING}. Use only one of: major, minor, patch."
             exit 1
           fi
 
-          echo "Version label set to: ${PRESENT[0]}"
+          VERSION_STR="${VERSION_PRESENT[0]:-documentation}"
+          echo "Version label set to: ${VERSION_STR}"
 
   test:
     runs-on: ubuntu-latest
