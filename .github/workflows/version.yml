@@ -14,7 +14,9 @@ jobs:
   version:
     if: >-
       github.event.pull_request.merged == true &&
-      !contains(github.event.pull_request.labels.*.name, 'documentation')
+      (contains(github.event.pull_request.labels.*.name, 'major') ||
+       contains(github.event.pull_request.labels.*.name, 'minor') ||
+       contains(github.event.pull_request.labels.*.name, 'patch'))
     runs-on: ubuntu-latest
     permissions:
       contents: read
