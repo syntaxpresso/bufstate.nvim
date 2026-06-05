@@ -64,7 +64,12 @@ function M.save_metadata(name, buffers_by_tab)
 	local path = M.metadata_path(name)
 	local file, open_err = io.open(path, "w")
 	if not file then
-		error("Failed to write bufstate metadata for session '" .. name .. "': " .. (open_err or "unknown error"))
+		error(
+			"Failed to write bufstate metadata for session '"
+				.. name
+				.. "': "
+				.. (open_err or "unknown error")
+		)
 	end
 	file:write(vim.json.encode({ version = 1, tabs = buffers_by_tab }))
 	file:close()
