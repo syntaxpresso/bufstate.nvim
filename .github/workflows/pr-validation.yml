@@ -37,3 +37,25 @@ jobs:
           fi
 
           echo "Version label set to: ${PRESENT[0]}"
+
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        neovim_version:
+          - v0.9.5
+          - v0.10.4
+          - nightly
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Neovim
+        uses: rhysd/action-setup-vim@v1
+        with:
+          neovim: true
+          version: ${{ matrix.neovim_version }}
+
+      - name: Run tests
+        run: make test
