@@ -158,6 +158,9 @@ Do this:
 " Save your workspace
 :BufstateSave myworkspace
 
+" Exit Neovim — session auto-saves on exit (VimLeavePre).
+" Use :qall, close the terminal — whatever you prefer.
+
 " Next day: restore instantly
 :BufstateLoad myworkspace
 " Or just open Neovim — auto-loads last session if configured!
@@ -189,7 +192,8 @@ Do this:
    - Press `<leader>qs` to quick-save
    - Auto-saves happen every 5 minutes
 
-4. **Tomorrow:**
+4. **End of day / Tomorrow:**
+   - Exit Neovim (`:qall`, close terminal, etc.) — session auto-saves on exit
    - Open Neovim
    - Everything auto-restores — tabs, buffers, window splits, even cursor positions
 
