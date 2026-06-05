@@ -228,4 +228,47 @@ describe("bufstate.session", function()
 			assert.is_true(vim.tbl_contains(names, "second"))
 		end)
 	end)
+
+	describe("alternate", function()
+		before_each(function()
+			session.set_save_fn(function(name)
+				storage.save(name)
+				session.current = name
+			end)
+			session.save("alternate-a")
+			session.save("alternate-b")
+			session.previous = nil
+		end)
+
+		it("returns error when no previous session exists", function()
+			session.current = nil
+			session.previous = nil
+			local ok, err = session.alternate()
+			assert.is_false(ok)
+			assert.is_not_nil(err)
+		end)
+
+		it("loads the previous session", function()
+			local ok, err = session.load("alternate-a")
+			assert.is_true(ok, err)
+			ok, err = session.load("alternate-b")
+			assert.is_true(ok, err)
+			assert.equals("alternate-a", session.previous)
+
+			ok, err = session.alternate()
+			assert.is_true(ok, err)
+			assert.equals("alternate-a", session.current)
+		end)
+
+		it("toggles between two sessions", function()
+			session.load("alternate-a")
+			session.load("alternate-b")
+
+			session.alternate()
+			assert.equals("alternate-a", session.current)
+
+			session.alternate()
+			assert.equals("alternate-b", session.current)
+		end)
+	end)
 end)

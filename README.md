@@ -34,6 +34,7 @@ https://github.com/user-attachments/assets/9162f9a5-8576-4f95-b01b-0f2a1ab10f17
 - **Close** (`BufstateClose`) — Saves the current workspace and closes it, leaving a clean slate. Follow up with `:BufstateLoad` to switch context.
 - **List** (`BufstateList`) — Shows all saved sessions with timestamps and current marker
 - **Auto-load on startup** — Optionally restores the last used session when Neovim opens
+- **Alternate session** (`BufstateAlternate`) — Toggle between the last two sessions with one key, like tmux's `prefix + L`
 - **Interactive picker** — Fuzzy-search through sessions with preview (snacks.nvim integration, falls back to `vim.ui.select`)
 - **Multiple named sessions** — Maintain as many independent sessions as you need
 
@@ -121,6 +122,7 @@ return {
   --   { "<leader>qd", "<cmd>BufstateDelete<CR>", desc = "Delete session" },
   --   { "<leader>qn", "<cmd>BufstateNew<CR>",    desc = "New session" },
   --   { "<leader>qc", "<cmd>BufstateClose<CR>", desc = "Close workspace" },
+  --   { "<leader>qa", "<cmd>BufstateAlternate<CR>", desc = "Alternate session" },
   -- },
 }
 
@@ -209,6 +211,7 @@ Do this:
 | `<leader>qd` | `:BufstateDelete` | Delete session (picker)                       |
 | `<leader>qn` | `:BufstateNew`    | New session (saves current, clears workspace) |
 | `<leader>qc` | `:BufstateClose`  | Close workspace (save + clear buffers/tabs)   |
+| `<leader>qa` | `:BufstateAlternate` | Load previous session (toggle)           |
 
 Disable all default keymaps:
 
@@ -228,6 +231,7 @@ vim.g.bufstate_no_default_maps = 1
 | `:BufstateDelete` | `[name]`  | Delete a session (shows picker if no name)      |
 | `:BufstateNew`    | `[name]`  | Save current, then start a fresh workspace      |
 | `:BufstateClose`  | None      | Save current and close workspace (clears buffers/tabs) |
+| `:BufstateAlternate` | None   | Load the previously active session (toggle)          |
 | `:BufstateList`   | None      | List all sessions with timestamps and marker    |
 
 ### Safe Delete Commands

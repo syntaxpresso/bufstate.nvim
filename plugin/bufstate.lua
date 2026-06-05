@@ -23,4 +23,5 @@ if not vim.g.bufstate_no_default_maps then
 	vim.keymap.set("n", "<leader>qd", ":BufstateDelete<CR>", { desc = "Delete session" })
 	vim.keymap.set("n", "<leader>qn", ":BufstateNew<CR>", { desc = "New session" })
 	vim.keymap.set("n", "<leader>qc", ":BufstateClose<CR>", { desc = "Close workspace" })
+	vim.keymap.set("n", "<leader>qa", ":BufstateAlternate<CR>", { desc = "Alternate session" })
 end

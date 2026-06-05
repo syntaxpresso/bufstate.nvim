@@ -109,7 +109,7 @@ function M.load(name)
 	-- `only` command that closes all but one window; if the only remaining window
 	-- is a floating one Neovim raises E5601. Closing floats first avoids this.
 	for _, win in ipairs(vim.api.nvim_list_wins()) do
-		if vim.api.nvim_win_get_config(win).relative ~= "" then
+		if vim.api.nvim_win_is_valid(win) and vim.api.nvim_win_get_config(win).relative ~= "" then
 			pcall(vim.api.nvim_win_close, win, true)
 		end
 	end

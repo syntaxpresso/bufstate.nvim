@@ -15,6 +15,9 @@ local M = {}
 -- Current session name (nil = unsaved / no session active)
 M.current = nil
 
+-- Previously active session name (nil = no alternate to switch to)
+M.previous = nil
+
 -- Injected by init.lua; wraps storage.save() with the buflisted relist sandwich
 local save_fn = nil
 
@@ -76,6 +79,7 @@ function M.load(name)
 		return false, err
 	end
 
+	M.previous = M.current
 	M.current = name
 	storage.save_last_loaded(name)
 	return true
@@ -128,6 +132,16 @@ function M.close()
 	end
 
 	M.current = nil
+end
+
+--- Load the previously active session (toggle between last two).
+--- Calls M.load(), which saves current and tracks the swap.
+---@return boolean ok, string|nil err
+function M.alternate()
+	if not M.previous then
+		return false, "No alternate session available"
+	end
+	return M.load(M.previous)
 end
 
 --- List all saved sessions.
