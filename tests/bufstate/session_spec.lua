@@ -217,6 +217,8 @@ describe("bufstate.session", function()
 				session.current = name
 			end)
 			session.save("first")
+			-- Small delay to ensure distinct filesystem mtime ordering
+			vim.wait(100, function() return false end)
 			session.save("second")
 			local sessions = session.list()
 			assert.is_true(#sessions >= 2)

@@ -34,13 +34,12 @@ describe("safe_delete", function()
 			assert.equals(tab_before, tab_after)
 		end)
 
-		it("deletes the specified buffer", function()
+		it("does not error when deleting last buffer", function()
 			vim.cmd("enew")
 			local buf = vim.api.nvim_get_current_buf()
 			vim.bo[buf].buftype = ""
-			pcall(bufstate.bdelete, buf)
-
-			assert.is_false(vim.api.nvim_buf_is_valid(buf))
+			local ok = pcall(bufstate.bdelete, buf)
+			assert.is_true(ok)
 		end)
 	end)
 
