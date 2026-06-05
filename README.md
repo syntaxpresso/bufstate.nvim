@@ -91,27 +91,47 @@ https://github.com/user-attachments/assets/9162f9a5-8576-4f95-b01b-0f2a1ab10f17
 ### Using [lazy.nvim](https://github.com/folke/lazy.nvim)
 
 ```lua
-{
+-- Disable default keymaps before plugin loads (uncomment to use)
+-- vim.g.bufstate_no_default_maps = 1
+
+return {
   "syntaxpresso/bufstate.nvim",
   dependencies = { "folke/snacks.nvim" }, -- optional, for nicer UI
   opts = {
-    autoload_last_session = false,   -- Auto-load latest session on startup
-    stop_lsp_on_tab_leave = true,    -- Stop LSP clients when leaving a tab
-    stop_lsp_on_session_load = true, -- Stop all LSP clients before loading a session
+    -- LSP management
+    stop_lsp_on_tab_leave = true,       -- Stop LSP when leaving a tab
+    stop_lsp_on_session_load = true,    -- Stop all LSP before loading a session
+    autoload_last_session = false,       -- Auto-load last session on startup
+
+    -- Autosave
     autosave = {
-      enabled = true,      -- Enable periodic autosave
-      on_exit = true,      -- Save when exiting Neovim
-      interval = 300000,   -- Interval between saves in ms (5 minutes)
-      debounce = 30000,    -- Minimum time between saves in ms (30 seconds)
+      enabled = true,       -- Enable periodic background saves
+      on_exit = true,       -- Save when exiting Neovim
+      interval = 300000,    -- 5 minutes (in ms, 0 = disabled)
+      debounce = 30000,     -- Minimum 30 seconds between saves
     },
   },
-}
-```
 
-> Disable default keymaps before lazy.nvim loads the plugin:
-> ```lua
-> vim.g.bufstate_no_default_maps = 1
-> ```
+  -- Override default keymaps (uncomment to use)
+  -- keys = {
+  --   { "<leader>ss", "<cmd>BufstateSave<CR>",   desc = "Save session" },
+  --   { "<leader>sS", "<cmd>BufstateSaveAs<CR>", desc = "Save session as" },
+  --   { "<leader>sl", "<cmd>BufstateLoad<CR>",   desc = "Load session" },
+  --   { "<leader>sd", "<cmd>BufstateDelete<CR>", desc = "Delete session" },
+  --   { "<leader>sn", "<cmd>BufstateNew<CR>",    desc = "New session" },
+  -- },
+}
+
+-- Bufferline integration (uncomment to use):
+-- require("bufferline").setup({
+--   options = {
+--     custom_filter = require("bufstate").buf_filter,
+--     close_command = function(buf)
+--       require("bufstate").bdelete(buf)
+--     end,
+--   },
+-- })
+```
 
 ## Quick Start
 
