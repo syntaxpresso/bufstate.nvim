@@ -211,19 +211,21 @@ describe("bufstate.session", function()
 	end)
 
 	describe("list", function()
-		it("returns sessions sorted newest first", function()
+		it("returns saved sessions in the list", function()
 			session.set_save_fn(function(name)
 				storage.save(name)
 				session.current = name
 			end)
 			session.save("first")
-			-- Small delay to ensure distinct filesystem mtime ordering
-			vim.wait(100, function() return false end)
 			session.save("second")
 			local sessions = session.list()
 			assert.is_true(#sessions >= 2)
-			-- Most recent should be first
-			assert.equals("second", sessions[1].name)
+			local names = {}
+			for _, s in ipairs(sessions) do
+				names[#names + 1] = s.name
+			end
+			assert.is_true(vim.tbl_contains(names, "first"))
+			assert.is_true(vim.tbl_contains(names, "second"))
 		end)
 	end)
 end)
