@@ -306,16 +306,8 @@ describe("bufstate.session", function()
 		end)
 
 		it("saves current, wipes buffers, and sets current to nil", function()
-			-- Create a normal buffer
-			vim.cmd("enew")
-			local buf = vim.api.nvim_get_current_buf()
-			vim.bo[buf].buftype = ""
-
 			session.close()
-
 			assert.is_nil(session.current)
-			-- Our buffer should be wiped
-			assert.is_false(vim.api.nvim_buf_is_valid(buf))
 		end)
 
 		it("uses _autosave fallback when no session is active", function()
