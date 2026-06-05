@@ -625,9 +625,9 @@ function M.setup(_opts)
 	vim.api.nvim_create_user_command("BufstateList", function()
 		local sessions = storage.list()
 		if #sessions == 0 then
-				vim.notify("No sessions found", vim.log.levels.WARN)
-				return
-			end
+			vim.notify("No sessions found", vim.log.levels.WARN)
+			return
+		end
 		local lines = { "bufstate.nvim sessions:" }
 		for _, s in ipairs(sessions) do
 			local ts = os.date("%Y-%m-%d %H:%M", s.mtime)
