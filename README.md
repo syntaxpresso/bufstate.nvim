@@ -114,11 +114,11 @@ return {
 
   -- Override default keymaps (uncomment to use)
   -- keys = {
-  --   { "<leader>ss", "<cmd>BufstateSave<CR>",   desc = "Save session" },
-  --   { "<leader>sS", "<cmd>BufstateSaveAs<CR>", desc = "Save session as" },
-  --   { "<leader>sl", "<cmd>BufstateLoad<CR>",   desc = "Load session" },
-  --   { "<leader>sd", "<cmd>BufstateDelete<CR>", desc = "Delete session" },
-  --   { "<leader>sn", "<cmd>BufstateNew<CR>",    desc = "New session" },
+  --   { "<leader>qs", "<cmd>BufstateSave<CR>",   desc = "Save session" },
+  --   { "<leader>qS", "<cmd>BufstateSaveAs<CR>", desc = "Save session as" },
+  --   { "<leader>ql", "<cmd>BufstateLoad<CR>",   desc = "Load session" },
+  --   { "<leader>qd", "<cmd>BufstateDelete<CR>", desc = "Delete session" },
+  --   { "<leader>qn", "<cmd>BufstateNew<CR>",    desc = "New session" },
   -- },
 }
 
