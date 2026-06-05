@@ -606,6 +606,16 @@ function M.setup(_opts)
 		vim.notify("Workspace closed — use :BufstateLoad to open another session", vim.log.levels.INFO)
 	end, { desc = "Save current workspace and close it (clears buffers and tabs)" })
 
+	-- :BufstateAlternate — load the previously active session (toggle)
+	vim.api.nvim_create_user_command("BufstateAlternate", function()
+		local ok, err = session.alternate()
+		if not ok then
+			vim.notify(err or "Failed to load alternate session", vim.log.levels.WARN)
+		else
+			vim.notify("Alternate session loaded: " .. session.current, vim.log.levels.INFO)
+		end
+	end, { desc = "Load the previously active session (toggle between last two)" })
+
 	-- :BufstateList — print all sessions
 	vim.api.nvim_create_user_command("BufstateList", function()
 		local sessions = storage.list()
